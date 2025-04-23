@@ -1,0 +1,2228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance Forecaster (Multi-Plan)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* --- Modern Professional Layout --- */
+        body {
+            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f7fa;
+            color: #222;
+        }
+        h1 {
+            margin-top: 0;
+            padding: 32px 0 0 0;
+            text-align: center;
+            font-size: 2.5rem;
+            letter-spacing: 1px;
+            color: #1a237e;
+        }
+        h3 {
+            text-align: center;
+            margin-top: 0;
+            color: #607d8b;
+            font-weight: 400;
+        }
+        .input-section {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(30, 34, 90, 0.07);
+            padding: 24px 32px 16px 32px;
+            margin: 24px auto 16px auto;
+            max-width: 900px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 18px 24px;
+        }
+        .input-section label {
+            font-weight: 500;
+            color: #374151;
+            margin-right: 4px;
+        }
+        .input-section input[type="date"],
+        .input-section input[type="number"] {
+            border: 1px solid #bfc9d9;
+            border-radius: 6px;
+            padding: 7px 12px;
+            font-size: 1rem;
+            background: #f8fafc;
+            transition: border 0.2s;
+        }
+        .input-section input[type="date"]:focus,
+        .input-section input[type="number"]:focus {
+            border: 1.5px solid #1976d2;
+            outline: none;
+        }
+        .input-section button {
+            background: linear-gradient(90deg, #1976d2 60%, #42a5f5 100%);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 22px;
+            font-size: 1rem;
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(25, 118, 210, 0.08);
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .input-section button:hover {
+            background: linear-gradient(90deg, #1565c0 60%, #1976d2 100%);
+            box-shadow: 0 4px 12px rgba(25, 118, 210, 0.13);
+        }
+        /* Hide the Load Data from CSV button */
+        #loadCsvBtn { display: none; }
+
+        /* --- Calculate Button Click Effect --- */
+        #calculateBtn.clicked {
+            animation: calcBtnClick 0.25s;
+        }
+        @keyframes calcBtnClick {
+            0% { transform: scale(1); box-shadow: 0 2px 6px rgba(25, 118, 210, 0.08);}
+            50% { transform: scale(0.93); box-shadow: 0 0 0 rgba(25, 118, 210, 0);}
+            100% { transform: scale(1); box-shadow: 0 2px 6px rgba(25, 118, 210, 0.08);}
+        }
+        /* --- Tabs --- */
+        .tab-container {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 0;
+            background: #e3eafc;
+            border-bottom: 2px solid #bfc9d9;
+            box-shadow: 0 2px 8px rgba(30, 34, 90, 0.04);
+        }
+        .tab-container button {
+            background: none;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 18px 38px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #1a237e;
+            border-bottom: 4px solid transparent;
+            transition: background 0.2s, border-bottom 0.2s, color 0.2s;
+            border-radius: 12px 12px 0 0;
+            margin-bottom: -2px;
+        }
+        /* --- Per-tab coloring for active and hover states --- */
+        .tab-container button.active:nth-child(1),
+        .tab-container button.tab-tasks-active {
+            background: linear-gradient(120deg, #f8fafc 60%, #e3f2fd 100%);
+            color: #1976d2;
+            border-bottom: 4px solid #1976d2;
+            z-index: 2;
+        }
+        .tab-container button.active:nth-child(2),
+        .tab-container button.tab-summary-active {
+            background: linear-gradient(120deg, #f9fbe7 60%, #fffde7 100%);
+            color: #1976d2;
+            border-bottom: 4px solid #1976d2;
+            z-index: 2;
+        }
+        .tab-container button.active:nth-child(3),
+        .tab-container button.tab-chart-active {
+            background: linear-gradient(120deg, #f3e5f5 60%, #e1bee7 100%);
+            color: #1976d2;
+            border-bottom: 4px solid #1976d2;
+            z-index: 2;
+        }
+        .tab-container button.active:nth-child(4),
+        .tab-container button.tab-gantt-active {
+            background: linear-gradient(120deg, #e8f5e9 60%, #c8e6c9 100%);
+            color: #2e7d32;
+            border-bottom: 4px solid #2e7d32;
+            z-index: 2;
+        }
+        /* Hover states for each tab */
+        .tab-container button:nth-child(1):hover {
+            background: linear-gradient(120deg, #f8fafc 60%, #e3f2fd 100%);
+        }
+        .tab-container button:nth-child(2):hover {
+            background: linear-gradient(120deg, #f9fbe7 60%, #fffde7 100%);
+        }
+        .tab-container button:nth-child(3):hover {
+            background: linear-gradient(120deg, #f3e5f5 60%, #e1bee7 100%);
+        }
+        .tab-container button:nth-child(4):hover {
+            background: linear-gradient(120deg, #e8f5e9 60%, #c8e6c9 100%);
+        }
+        /* --- Tab Content Backgrounds --- */
+        .tab-content {
+            display: none;
+            padding: 32px 40px 32px 40px;
+            border-radius: 0 0 16px 16px;
+            margin: 0 auto 32px auto;
+            max-width: 1100px;
+            min-height: 400px;
+            box-shadow: 0 2px 12px rgba(30, 34, 90, 0.08);
+        }
+        #tasksTab.tab-content {
+            background: linear-gradient(120deg, #f8fafc 60%, #e3f2fd 100%);
+        }
+        #summaryTab.tab-content {
+            background: linear-gradient(120deg, #f9fbe7 60%, #fffde7 100%);
+        }
+        #chartTab.tab-content {
+            background: linear-gradient(120deg, #f3e5f5 60%, #e1bee7 100%);
+        }
+        #ganttTab.tab-content {
+            background: linear-gradient(120deg, #e8f5e9 60%, #c8e6c9 100%);
+        }
+
+        /* --- Tables --- */
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 18px;
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(30, 34, 90, 0.06);
+        }
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+        }
+        th {
+            background: #e3eafc;
+            color: #1a237e;
+            font-weight: 600;
+            border-bottom: 2px solid #bfc9d9;
+        }
+        tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+        tr:hover td {
+            background: #e3f2fd;
+        }
+        #taskTable input[type="number"] {
+            width: 70px;
+            border: 1px solid #bfc9d9;
+            border-radius: 5px;
+            padding: 5px 8px;
+            background: #f8fafc;
+        }
+        #taskTable input[type="checkbox"] {
+            cursor: pointer;
+            accent-color: #1976d2;
+        }
+        .suppression-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .suppression-list label {
+            font-size: 0.97rem;
+            color: #374151;
+            margin-left: 4px;
+        }
+
+        /* --- Buttons in Tabs (base modern 3D style) --- */
+        .saveTasksBtn,
+        .saveSummaryBtn,
+        .printSummaryBtn {
+            /* thin appearance */
+            padding: 4px 16px;
+            height: 32px;
+            line-height: 24px;
+            /* no hard border */
+            border: none;
+            /* subtle round corners */
+            border-radius: 8px;
+            /* gentle 3D gradient */
+            background: linear-gradient(145deg, #42a5f5 30%, #1976d2 100%);
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 500;
+            /* soft shadow */
+            box-shadow: 0 4px 8px rgba(25,118,210,0.15);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .saveTasksBtn:hover,
+        .saveSummaryBtn:hover,
+        .printSummaryBtn:hover {
+            /* lift effect */
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(25,118,210,0.2);
+        }
+
+        /* --- Professional Plan Button Colors --- */
+        .saveTasksBtn[data-plan="A"], .saveSummaryBtn[data-plan="A"] {
+            background: linear-gradient(90deg, #1976d2 60%, #42a5f5 100%);
+            color: #fff;
+        }
+        .saveTasksBtn[data-plan="A"]:hover, .saveSummaryBtn[data-plan="A"]:hover {
+            background: linear-gradient(90deg, #1565c0 60%, #1976d2 100%);
+        }
+
+        .saveTasksBtn[data-plan="B"], .saveSummaryBtn[data-plan="B"] {
+            background: linear-gradient(90deg, #ff9800 60%, #ffc107 100%);
+            color: #fff;
+        }
+        .saveTasksBtn[data-plan="B"]:hover, .saveSummaryBtn[data-plan="B"]:hover {
+            background: linear-gradient(90deg, #f57c00 60%, #ff9800 100%);
+        }
+
+        .saveTasksBtn[data-plan="C"], .saveSummaryBtn[data-plan="C"] {
+            background: linear-gradient(90deg, #388e3c 60%, #66bb6a 100%);
+            color: #fff;
+        }
+        .saveTasksBtn[data-plan="C"]:hover, .saveSummaryBtn[data-plan="C"]:hover {
+            background: linear-gradient(90deg, #2e7d32 60%, #388e3c 100%);
+        }
+
+        /* --- Print Plan Button Colors --- */
+        .printSummaryBtn[data-plan="A"] {
+            background: linear-gradient(90deg, #1976d2 60%, #42a5f5 100%);
+            color: #fff;
+        }
+        .printSummaryBtn[data-plan="A"]:hover {
+            background: linear-gradient(90deg, #1565c0 60%, #1976d2 100%);
+        }
+        .printSummaryBtn[data-plan="B"] {
+            background: linear-gradient(90deg, #ff9800 60%, #ffc107 100%);
+            color: #fff;
+        }
+        .printSummaryBtn[data-plan="B"]:hover {
+            background: linear-gradient(90deg, #f57c00 60%, #ff9800 100%);
+        }
+        .printSummaryBtn[data-plan="C"] {
+            background: linear-gradient(90deg, #388e3c 60%, #66bb6a 100%);
+            color: #fff;
+        }
+        .printSummaryBtn[data-plan="C"]:hover {
+            background: linear-gradient(90deg, #2e7d32 60%, #388e3c 100%);
+        }
+
+        /* --- Chart --- */
+        #impactChart {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(30, 34, 90, 0.06);
+            padding: 18px;
+            margin-top: 18px;
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 900px) {
+            .input-section, .tab-content {
+                padding: 18px 8px 18px 8px;
+            }
+            .tab-content {
+                min-width: 0;
+            }
+        }
+        @media (max-width: 600px) {
+            .input-section, .tab-content {
+                padding: 10px 2px 10px 2px;
+            }
+            .tab-container button {
+                padding: 12px 10px;
+                font-size: 0.98rem;
+            }
+            h1 { font-size: 1.5rem; }
+        }
+
+        /* --- Print Styles --- */
+        @media print {
+            body * { visibility: hidden; }
+            #summaryTab, #summaryTab * { visibility: visible; }
+            #summaryTab { position: absolute; left: 0; top: 0; width: 100%; }
+            button#printSummaryBtn { display: none; }
+            .tab-container, .input-section, #tasksTab, #chartTab, #ganttTab { display: none; }
+            #dataInputSection { display: none; }
+        }
+
+        /* --- Sub-Tabs --- */
+        .sub-tab-container {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+        }
+        .sub-tab-button {
+            background: #e0e0e0;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            font-size: 0.95rem;
+            color: #333;
+            transition: background 0.2s, color 0.2s;
+        }
+        .sub-tab-button.active {
+            background: #fff;
+            color: #1976d2;
+            border-bottom: 1px solid #fff;
+            margin-bottom: -1px;
+            font-weight: 500;
+        }
+        .sub-tab-button:hover:not(.active) {
+            background: #f0f0f0;
+        }
+        .sub-tab-content {
+            display: none;
+            padding-top: 10px;
+        }
+        .sub-tab-content.active {
+            display: block;
+        }
+
+        /* --- Gantt Chart Styles --- */
+        .gantt-chart-container {
+            display: flex;
+            overflow: visible; /* allow axis labels to show */
+            --gantt-axis-width: 270px; /* increase axis area */
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 1px 4px rgba(30, 34, 90, 0.06);
+            margin-top: 15px;
+        }
+        .gantt-axis-svg {
+            flex: 0 0 var(--gantt-axis-width, 300px);
+        }
+        .gantt-scroll {
+            flex: 1 1 auto;
+            overflow-x: auto;
+            overflow-y: auto;
+        }
+            display: block;
+        }
+        .gantt-axis path,
+        .gantt-axis line {
+            fill: none;
+            stroke: #888;
+            shape-rendering: crispEdges;
+        }
+        .gantt-axis text {
+            font-size: 0.8rem;
+            fill: #555;
+        }
+        .gantt-grid path {
+            stroke: none; /* Hide domain path for grid */
+        }
+        .gantt-grid .tick line {
+            stroke: #e0e0e0;
+            /* stroke: #087920; */
+            stroke-dasharray: 2,2;
+        }
+        .gantt-horizontal-grid path { 
+            stroke: none; 
+        }
+        .gantt-horizontal-grid .tick line { 
+            stroke: #e0e0e0; 
+            stroke-dasharray: 2,2; 
+        }
+        .gantt-bar {
+            fill: #1976d2;
+            stroke: #1565c0;
+            stroke-width: 1px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+        .gantt-bar:hover {
+            opacity: 1;
+        }
+        .gantt-tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            pointer-events: none;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        .gantt-no-data {
+            fill: #777;
+            font-size: 1rem;
+            text-anchor: middle;
+        }
+
+        /* Modern Sort Gantt Button */
+        .sortGanttBtn {
+            background: transparent;
+            border: 1px solid #bfc9d9;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 0.95rem;
+            color: #374151;
+            opacity: 0.8;
+            transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, opacity 0.2s;
+        }
+        .sortGanttBtn:hover {
+            background: #f8fafc;
+            border-color: #1976d2;
+            color: #1976d2;
+            opacity: 1;
+        }
+        .sortGanttBtn.active {
+            background: #ffeb3b;                   /* neon yellow base */
+            border-color: #ffeb3b;
+            color: #000;                           /* dark text for contrast */
+            box-shadow:
+                0 0 8px   #ffeb3b,
+                0 0 16px  #ffeb3b,
+                0 0 24px  rgba(255,235,59,0.7),
+                0 0 32px  rgba(255,235,59,0.5);
+            opacity: 1;
+        }
+
+        /* Navigation Buttons for Gantt */
+        .navGanttBtn {
+            background: #e0e0e0;
+            border: 1px solid #bfc9d9;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 0.95rem;
+            color: #374151;
+            margin-left: 4px;
+            transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+        }
+        .navGanttBtn:hover {
+            background: #f8fafc;
+            border-color: #1976d2;
+            color: #1976d2;
+        }
+
+        /* --- Icon Button (Lock/Unlock Scroll) Styling --- */
+        .lockGanttBtn {
+            background: none;
+            border: grey;
+            font-size: 2rem;
+            font-style: bold;       /* 1.7 size */
+            color: rgb(92, 94, 92);      /* light gray icon */
+            /* padding-bottom: 0; */
+            padding: 0px 0px 10px 0px;            /* remove extra space */
+            cursor: pointer;
+        }
+        .lockGanttBtn:hover{
+            background: rgb(193, 222, 202);
+            outline: brown;
+        },
+        .lockGanttBtn:focus {
+            background: none;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Maintenance Forecaster (Multi-Plan)</h1>
+    <h3 style="margin-top: -10px; color: #555;">by Kuatrinnus Wijaya - April 2025</h3>
+
+    <!-- CSV File Input Section -->
+    <div class="input-section" style="max-width: 600px; margin-bottom: 0; margin-top: 24px; flex-direction: column; align-items: flex-start;">
+        <div style="margin-bottom: 8px;">
+            <label for="csvInputA" style="font-weight: 500; color: #374151;">Plan A Tasks CSV:</label>
+            <input type="file" id="csvInputA" data-plan="A" accept=".csv" style="margin-left: 12px;">
+        </div>
+        <div style="margin-bottom: 8px;">
+            <label for="csvInputB" style="font-weight: 500; color: #374151;">Plan B Tasks CSV:</label>
+            <input type="file" id="csvInputB" data-plan="B" accept=".csv" style="margin-left: 12px;">
+        </div>
+        <div>
+            <label for="csvInputC" style="font-weight: 500; color: #374151;">Plan C Tasks CSV:</label>
+            <input type="file" id="csvInputC" data-plan="C" accept=".csv" style="margin-left: 12px;">
+        </div>
+    </div>
+
+    <!-- Input Section -->
+    <div class="input-section" style="margin-top: 12px;">
+        <label for="startDate">Analysis Start Date:</label>
+        <input type="date" id="startDate" value="2025-04-26">
+        <label for="endDate">Analysis End Date:</label>
+        <input type="date" id="endDate">
+        <label for="initialAge">Initial Equipment Age (Hours):</label>
+        <input type="number" id="initialAge" value="0" min="0">
+        <label for="avgDailyUsage">Average Daily Usage (Hours):</label>
+        <input type="number" id="avgDailyUsage" value="24" min="0.01" max="24" step="0.01">
+    </div>
+
+    <!-- Data Input Section -->
+    <div id="dataInputSection" class="input-section">
+        <button id="calculateBtn">Calculate Schedules</button>
+        <!-- Hidden load buttons, triggered by file selection -->
+        <button id="loadCsvBtnA" data-plan="A" style="display: none;">Load A</button>
+        <button id="loadCsvBtnB" data-plan="B" style="display: none;">Load B</button>
+        <button id="loadCsvBtnC" data-plan="C" style="display: none;">Load C</button>
+    </div>
+
+
+    <!-- Tabs -->
+    <div class="tab-container">
+        <button class="tab-button active" onclick="openTab(event, 'tasksTab')">Tasks & Suppressions</button>
+        <button class="tab-button" onclick="openTab(event, 'summaryTab')">Monthly Summary</button>
+        <button class="tab-button" onclick="openTab(event, 'chartTab')">Chart</button>
+        <button class="tab-button" onclick="openTab(event, 'ganttTab')">Gantt Chart</button>
+    </div>
+
+    <!-- Task Input/Management Tab -->
+    <div id="tasksTab" class="tab-content" style="display:block;">
+        <h2>Maintenance Tasks</h2>
+        <p>Review tasks, edit durations, and manage suppression activation per plan.</p>
+        <div class="sub-tab-container">
+            <button class="sub-tab-button active" onclick="openSubTab(event, 'tasksTab', 'A')">Plan A</button>
+            <button class="sub-tab-button" onclick="openSubTab(event, 'tasksTab', 'B')">Plan B</button>
+            <button class="sub-tab-button" onclick="openSubTab(event, 'tasksTab', 'C')">Plan C</button>
+        </div>
+        <!-- Plan A Tasks -->
+        <div id="tasksTabA" class="sub-tab-content active">
+            <button class="saveTasksBtn" data-plan="A">Save Plan A Tasks</button>
+            <table id="taskTableA">
+                <thead><tr><th>ID</th><th>Maintenance Item</th><th>Frequency</th><th>Start Date (Last Done)</th><th>Duration (Hours)</th><th>Activate Suppressions</th></tr></thead>
+                <tbody><!-- Task rows for Plan A --></tbody>
+            </table>
+        </div>
+        <!-- Plan B Tasks -->
+        <div id="tasksTabB" class="sub-tab-content">
+            <button class="saveTasksBtn" data-plan="B">Save Plan B Tasks</button>
+            <table id="taskTableB">
+                <thead><tr><th>ID</th><th>Maintenance Item</th><th>Frequency</th><th>Start Date (Last Done)</th><th>Duration (Hours)</th><th>Activate Suppressions</th></tr></thead>
+                <tbody><!-- Task rows for Plan B --></tbody>
+            </table>
+        </div>
+        <!-- Plan C Tasks -->
+        <div id="tasksTabC" class="sub-tab-content">
+            <button class="saveTasksBtn" data-plan="C">Save Plan C Tasks</button>
+            <table id="taskTableC">
+                <thead><tr><th>ID</th><th>Maintenance Item</th><th>Frequency</th><th>Start Date (Last Done)</th><th>Duration (Hours)</th><th>Activate Suppressions</th></tr></thead>
+                <tbody><!-- Task rows for Plan C --></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Monthly Summary Tab -->
+    <div id="summaryTab" class="tab-content">
+        <h2>Monthly Summary</h2>
+         <div class="sub-tab-container">
+            <button class="sub-tab-button active" onclick="openSubTab(event, 'summaryTab', 'A')">Plan A</button>
+            <button class="sub-tab-button" onclick="openSubTab(event, 'summaryTab', 'B')">Plan B</button>
+            <button class="sub-tab-button" onclick="openSubTab(event, 'summaryTab', 'C')">Plan C</button>
+        </div>
+         <!-- Plan A Summary -->
+        <div id="summaryTabA" class="sub-tab-content active">
+            <button class="printSummaryBtn" data-plan="A">Print Plan A Summary</button>
+            <button class="saveSummaryBtn" data-plan="A">Save Plan A Summary</button>
+            <table id="summaryTableA">
+                <thead><tr><th>Month</th><th>Total Hours</th><th>Downtime Hours</th><th>Est. Availability Impact (%)</th><th>Tasks Due</th></tr></thead>
+                <tbody><!-- Summary rows for Plan A --></tbody>
+            </table>
+        </div>
+        <!-- Plan B Summary -->
+        <div id="summaryTabB" class="sub-tab-content">
+            <button class="printSummaryBtn" data-plan="B">Print Plan B Summary</button>
+            <button class="saveSummaryBtn" data-plan="B">Save Plan B Summary</button>
+            <table id="summaryTableB">
+                 <thead><tr><th>Month</th><th>Total Hours</th><th>Downtime Hours</th><th>Est. Availability Impact (%)</th><th>Tasks Due</th></tr></thead>
+               <tbody><!-- Summary rows for Plan B --></tbody>
+            </table>
+        </div>
+        <!-- Plan C Summary -->
+        <div id="summaryTabC" class="sub-tab-content">
+            <button class="printSummaryBtn" data-plan="C">Print Plan C Summary</button>
+            <button class="saveSummaryBtn" data-plan="C">Save Plan C Summary</button>
+            <table id="summaryTableC">
+                 <thead><tr><th>Month</th><th>Total Hours</th><th>Downtime Hours</th><th>Est. Availability Impact (%)</th><th>Tasks Due</th></tr></thead>
+                <tbody><!-- Summary rows for Plan C --></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Chart Tab -->
+    <div id="chartTab" class="tab-content">
+        <!-- add toggle control -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+            <label><input type="checkbox" id="toggleAvailability" checked> Show Availability</label>
+        </div>
+        <h2>Availability Impact Chart (Plan Comparison)</h2>
+        <canvas id="impactChart" width="800" height="400"></canvas>
+    </div>
+
+    <!-- Gantt Chart Tab -->
+    <div id="ganttTab" class="tab-content">
+        <h2>Maintenance Schedule Gantt Chart</h2>
+        <div class="sub-tab-container">
+            <button class="sub-tab-button active" onclick="openSubTab(event, 'ganttTab', 'A')">Plan A</button>
+            <button class="sub-tab-button" onclick="openSubTab(event, 'ganttTab', 'B')">Plan B</button>
+            <button class="sub-tab-button" onclick="openSubTab(event, 'ganttTab', 'C')">Plan C</button>
+        </div>
+        <!-- Plan A Gantt -->
+        <div id="ganttTabA" class="sub-tab-content active">
+            <button id="sortGanttA" class="sortGanttBtn" data-plan="A">Sort by Frequency</button>
+            <button class="navGanttBtn" data-plan="A" data-action="zoomIn">+</button>
+            <button class="navGanttBtn" data-plan="A" data-action="zoomOut">−</button>
+            <button class="lockGanttBtn" data-plan="A" aria-label="Lock Scroll">⇎</button>
+            <div class="gantt-chart-container">
+                <svg id="ganttChartA_axis" class="gantt-axis-svg"></svg>
+                <div class="gantt-scroll">
+                    <svg id="ganttChartA" class="gantt-chart-svg"></svg>
+                </div>
+            </div>
+        </div>
+        <!-- Plan B Gantt -->
+        <div id="ganttTabB" class="sub-tab-content">
+            <button id="sortGanttB" class="sortGanttBtn" data-plan="B">Sort by Frequency</button>
+            <button class="navGanttBtn" data-plan="B" data-action="zoomIn">+</button>
+            <button class="navGanttBtn" data-plan="B" data-action="zoomOut">−</button>
+            <button class="lockGanttBtn" data-plan="B" aria-label="Lock Scroll">⇎</button>
+            <div class="gantt-chart-container">
+                <svg id="ganttChartB_axis" class="gantt-axis-svg"></svg>
+                <div class="gantt-scroll">
+                    <svg id="ganttChartB" class="gantt-chart-svg"></svg>
+                </div>
+            </div>
+        </div>
+        <!-- Plan C Gantt -->
+        <div id="ganttTabC" class="sub-tab-content">
+            <button id="sortGanttC" class="sortGanttBtn" data-plan="C">Sort by Frequency</button>
+            <button class="navGanttBtn" data-plan="C" data-action="zoomIn">+</button>
+            <button class="navGanttBtn" data-plan="C" data-action="zoomOut">−</button>
+            <button class="lockGanttBtn" data-plan="C" aria-label="Lock Scroll">⇎</button>
+            <div class="gantt-chart-container">
+                <svg id="ganttChartC_axis" class="gantt-axis-svg"></svg>
+                <div class="gantt-scroll">
+                    <svg id="ganttChartC" class="gantt-chart-svg"></svg>
+                </div>
+            </div>
+        </div>
+        <!-- Tooltip Div -->
+        <div id="ganttTooltip" class="gantt-tooltip"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // --- Initial Data (for Plan A default) ---
+        const initialTasksData = [
+            { id: 1, name: "16W Mech Svce Loader WA1200-6", frequency: "16W", duration: 22, suppressions: "4" },
+            { id: 2, name: "1W Svce Lodr Daily Zone", frequency: "1W", duration: 0, suppressions: "none" },
+            { id: 3, name: "2W Mech Svce Loader WA1200-6", frequency: "2W", duration: 7, suppressions: "8, 7, 1, 4" },
+            { id: 4, name: "32W Mech Svce Loader WA1200-6", frequency: "32W", duration: 19, suppressions: "none" },
+            { id: 5, name: "4W Hyd Hose Insp Zone A WA1200-6", frequency: "4W", duration: 0, suppressions: "7" },
+            { id: 6, name: "4W Hyd Hose Insp Zone B WA1200-6", frequency: "4W", duration: 0, suppressions: "7" },
+            { id: 7, name: "4W Mech Svce Loader WA1200-6", frequency: "4W", duration: 15, suppressions: "8, 4, 1" },
+            { id: 8, name: "8W Mech Svce Loader WA1200-6", frequency: "8W", duration: 17, suppressions: "4, 1" },
+            { id: 9, name: "16W Insp EMV Comp", frequency: "16W", duration: 1, suppressions: "none" },
+            { id: 10, name: "10Y Stat Repl Brke Acum", frequency: "10Y", duration: 0, suppressions: "none" },
+            { id: 11, name: "240W Insp Stat Fire Syst WA1200-6", frequency: "240W", duration: 0, suppressions: "none" },
+            { id: 12, name: "24W Insp Fuel Fast Fill Syst", frequency: "24W", duration: 1.5, suppressions: "none" },
+            { id: 13, name: "24W Insp Stat Fire Syst WA1200-6", frequency: "24W", duration: 0, suppressions: "none" },
+            { id: 14, name: "24W Test Ulsc Cabn Seal", frequency: "24W", duration: 2, suppressions: "none" },
+            { id: 15, name: "26W Tech Insp CAS Syst", frequency: "26W", duration: 1, suppressions: "none" },
+            { id: 16, name: "2Y Stat Insp Ext Brke Acum", frequency: "2Y", duration: 1, suppressions: "none" },
+            { id: 17, name: "4000H Repl Fuel Hoses WA1200-6", frequency: "4000H", duration: 3, suppressions: "none" },
+            { id: 18, name: "48W Insp Stat Fire Syst WA1200-6", frequency: "48W", duration: 0, suppressions: "none" },
+            { id: 19, name: "6M Sfty Insp WAH Anch Pont", frequency: "6M", duration: 0, suppressions: "none" },
+            { id: 20, name: "26W Mech Cond Mntr NDT", frequency: "26W", duration: 6, suppressions: "none" },
+            { id: 21, name: "52W Mech Cond Mntr NDT", frequency: "52W", duration: 34, suppressions: "none" },
+            { id: 22, name: "10000H Repl Bckt Pins WA1200-6", frequency: "10000H", duration: 0, suppressions: "none" },
+            { id: 23, name: "10000H Repl Blcr Pins WA1200-6", frequency: "10000H", duration: 0, suppressions: "none" },
+            { id: 24, name: "10000H Repl Btm Vlve Sfty Suction", frequency: "10000H", duration: 0, suppressions: "55" },
+            { id: 25, name: "10000H Repl Ctr Vlve Sfty Suction", frequency: "10000H", duration: 0, suppressions: "56" },
+            { id: 26, name: "10000H Repl Top Vlve Sfty Suction", frequency: "10000H", duration: 0, suppressions: "59" },
+            { id: 27, name: "12000H Engi Drive Shaft WA1200-6", frequency: "12000H", duration: 3, suppressions: "none" },
+            { id: 28, name: "12000H Repl Both Brke Tredle Vlve", frequency: "12000H", duration: 11.5, suppressions: "none" },
+            { id: 29, name: "12000H Repl Brng Driv CTR", frequency: "12000H", duration: 5.5, suppressions: "none" },
+            { id: 30, name: "12000H Repl Engi Dapr WA1200", frequency: "12000H", duration: 26, suppressions: "none" },
+            { id: 31, name: "12000H Repl Matl Engi Mid WA1200", frequency: "12000H", duration: 27, suppressions: "67" },
+            { id: 32, name: "12000H Repl ROS Pumps WA1200-6", frequency: "12000H", duration: 8, suppressions: "none" },
+            { id: 33, name: "16000H Repl Brke Colr Fan Motr", frequency: "16000H", duration: 5.5, suppressions: "none" },
+            { id: 34, name: "16000H Repl Colr Tran WA1200", frequency: "16000H", duration: 10.5, suppressions: "none" },
+            { id: 35, name: "16000H Repl Emer Ster Syst", frequency: "16000H", duration: 6, suppressions: "none" },
+            { id: 36, name: "16000H Repl Impt Pump P1 WA1200", frequency: "16000H", duration: 11, suppressions: "none" },
+            { id: 37, name: "16000H Repl Impt Pump P2 WA1200", frequency: "16000H", duration: 11, suppressions: "none" },
+            { id: 38, name: "16000H Repl LH Dump Cyli WA1200-6", frequency: "16000H", duration: 20, suppressions: "none" },
+            { id: 39, name: "16000H Repl LH Lift Cyli WA1200-6", frequency: "16000H", duration: 52, suppressions: "none" },
+            { id: 40, name: "16000H Repl Pump Emer Ster LWR", frequency: "16000H", duration: 6, suppressions: "none" },
+            { id: 41, name: "16000H Repl Pump Emer Ster UPR", frequency: "16000H", duration: 6, suppressions: "none" },
+            { id: 42, name: "16000H Repl Pump Ster", frequency: "16000H", duration: 6, suppressions: "none" },
+            { id: 43, name: "16000H Repl RH Dump Cyli WA1200-6", frequency: "16000H", duration: 20, suppressions: "none" },
+            { id: 44, name: "16000H Repl RH Lift Cyli WA1200-6", frequency: "16000H", duration: 52, suppressions: "none" },
+            { id: 45, name: "16000H Repl Ster Cyli L", frequency: "16000H", duration: 7, suppressions: "none" },
+            { id: 46, name: "16000H Repl Ster Cyli R", frequency: "16000H", duration: 7, suppressions: "none" },
+            { id: 47, name: "16000H Repl Ster Demand Vlve L", frequency: "16000H", duration: 5.5, suppressions: "none" },
+            { id: 48, name: "16000H Repl Ster Demand Vlve R", frequency: "16000H", duration: 5.5, suppressions: "none" },
+            { id: 49, name: "16000H Repl Swch Pump WA1200-6", frequency: "16000H", duration: 6, suppressions: "none" },
+            { id: 50, name: "16000H Repl Tran & TC WA1200", frequency: "16000H", duration: 16, suppressions: "none" },
+            { id: 51, name: "16000H Repl Tran Pump WA1200-6", frequency: "16000H", duration: 6, suppressions: "none" },
+            { id: 52, name: "16000H Repl Trop Hydr Colr", frequency: "16000H", duration: 8, suppressions: "none" },
+            { id: 53, name: "20000H Ovhl Brng Artc", frequency: "20000H", duration: 170, suppressions: "none" },
+            { id: 54, name: "20000H Repl Bckt", frequency: "20000H", duration: 41, suppressions: "none" },
+            { id: 55, name: "20000H Repl Btm Hydr Ctrl Vlve", frequency: "20000H", duration: 20, suppressions: "none" },
+            { id: 56, name: "20000H Repl Ctre Hydr Ctrl Vlve", frequency: "20000H", duration: 20, suppressions: "none" },
+            { id: 57, name: "20000H Repl Frme Pins & Bushes", frequency: "20000H", duration: 0, suppressions: "56" },
+            { id: 58, name: "20000H Repl Pilt Ctrl Vlve WA1200", frequency: "20000H", duration: 6, suppressions: "none" },
+            { id: 59, name: "20000H Repl Top Hydr Ctrl Vlve", frequency: "20000H", duration: 14, suppressions: "none" },
+            { id: 60, name: "24000H Ovhl A/C WA1200-6", frequency: "24000H", duration: 16, suppressions: "67" },
+            { id: 61, name: "24000H Repl Axle Assy F WA1200-6", frequency: "24000H", duration: 39.5, suppressions: "none" },
+            { id: 62, name: "24000H Repl Axle Assy R WA1200-6", frequency: "24000H", duration: 41.5, suppressions: "none" },
+            { id: 63, name: "24000H Repl Brng Axle Ocil", frequency: "24000H", duration: 0, suppressions: "62" },
+            { id: 64, name: "24000H Repl Driv Shft CTR WA1200", frequency: "24000H", duration: 5.5, suppressions: "62" },
+            { id: 65, name: "24000H Repl Driv Shft F WA1200", frequency: "24000H", duration: 5.5, suppressions: "62" },
+            { id: 66, name: "24000H Repl Driv Shft R WA1200", frequency: "24000H", duration: 5.5, suppressions: "62" },
+            { id: 67, name: "24000H Repl Engi Assy", frequency: "24000H", duration: 84, suppressions: "none" },
+            { id: 68, name: "24000H Repl Fan WA1200-6", frequency: "24000H", duration: 5.5, suppressions: "none" },
+            { id: 69, name: "24000H Repl Hydr Colr WA1200-6", frequency: "24000H", duration: 10, suppressions: "none" },
+            { id: 70, name: "24000H Repl Rdtr WA1200-6", frequency: "24000H", duration: 16, suppressions: "none" },
+            { id: 71, name: "4000H Repl Brke Hoses", frequency: "4000H", duration: 11, suppressions: "none" },
+            { id: 72, name: "4000H Repl Brke Pumps WA1200-6", frequency: "4000H", duration: 6, suppressions: "none" },
+            { id: 73, name: "4000H Repl Hydr Hose WA1200-6", frequency: "4000H", duration: 18, suppressions: "none" },
+            { id: 74, name: "4000H Repl LH Lift Cyli Hose", frequency: "4000H", duration: 6, suppressions: "none" },
+            { id: 75, name: "4000H Repl LH Tilt Cyli Hose", frequency: "4000H", duration: 10.5, suppressions: "none" },
+            { id: 76, name: "4000H Repl RH Lift Cyli Hose", frequency: "4000H", duration: 6, suppressions: "none" },
+            { id: 77, name: "4000H Repl RH Tilt Cyli Hose", frequency: "4000H", duration: 4, suppressions: "none" },
+            { id: 78, name: "5000H Repl Hose Htch Cntr", frequency: "5000H", duration: 6, suppressions: "none" },
+            { id: 79, name: "52W Repl Batteries WA1200-6", frequency: "52W", duration: 5, suppressions: "none" },
+            { id: 80, name: "52W Repl Oper Seat WA1200-6", frequency: "52W", duration: 1.5, suppressions: "none" },
+            { id: 81, name: "52W Svce A/C Syst WA1200-6", frequency: "52W", duration: 12, suppressions: "none" },
+            { id: 82, name: "6000H Repl Eng Driv Shft Uvsl", frequency: "6000H", duration: 0, suppressions: "none" },
+            { id: 83, name: "6000H Repl Uvsl Driv Shft CTR", frequency: "6000H", duration: 4.5, suppressions: "none" },
+            { id: 84, name: "6000H Repl Uvsl Driv Shft F", frequency: "6000H", duration: 4.5, suppressions: "none" },
+            { id: 85, name: "6000H Repl Uvsl Driv Shft R", frequency: "6000H", duration: 4.5, suppressions: "none" },
+            { id: 86, name: "6M Hyd Tune Up OEM WA1200-6", frequency: "6M", duration: 5.5, suppressions: "none" },
+            { id: 87, name: "8000H Repl Brke Hoses", frequency: "8000H", duration: 16, suppressions: "none" },
+            { id: 88, name: "8000H Repl Ster Cyli Hose L", frequency: "8000H", duration: 5, suppressions: "none" },
+            { id: 89, name: "8000H Repl Ster Cyli Hose R", frequency: "8000H", duration: 5, suppressions: "none" },
+            { id: 90, name: "6000H Repl Grease Pump & dump vlve", frequency: "6000H", duration: 6, suppressions: "none" },
+            { id: 91, name: "12000H Engine Harness", frequency: "12000H", duration: 4, suppressions: "none" }
+        ];
+
+        // --- Plan Data Storage ---
+        let planData = {
+            A: { tasks: [], allSuppressions: [], scheduledTasks: [], monthlySummary: {}, loaded: false },
+            B: { tasks: [], allSuppressions: [], scheduledTasks: [], monthlySummary: {}, loaded: false },
+            C: { tasks: [], allSuppressions: [], scheduledTasks: [], monthlySummary: {}, loaded: false }
+        };
+
+        // --- DOM Elements ---
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const initialAgeInput = document.getElementById('initialAge');
+        const avgDailyUsageInput = document.getElementById('avgDailyUsage');
+        const calculateBtn = document.getElementById('calculateBtn');
+        // CSV Inputs and Load Buttons
+        const csvInputs = {
+            A: document.getElementById('csvInputA'),
+            B: document.getElementById('csvInputB'),
+            C: document.getElementById('csvInputC')
+        };
+        const loadCsvBtns = {
+            A: document.getElementById('loadCsvBtnA'),
+            B: document.getElementById('loadCsvBtnB'),
+            C: document.getElementById('loadCsvBtnC')
+        };
+        // Task Table Bodies
+        const taskTableBodies = {
+            A: document.getElementById('taskTableA').querySelector('tbody'),
+            B: document.getElementById('taskTableB').querySelector('tbody'),
+            C: document.getElementById('taskTableC').querySelector('tbody')
+        };
+        // Summary Table Bodies
+        const summaryTableBodies = {
+            A: document.getElementById('summaryTableA').querySelector('tbody'),
+            B: document.getElementById('summaryTableB').querySelector('tbody'),
+            C: document.getElementById('summaryTableC').querySelector('tbody')
+        };
+        // Gantt Chart SVGs
+        const ganttChartSvgs = {
+            A: d3.select("#ganttChartA"),
+            B: d3.select("#ganttChartB"),
+            C: d3.select("#ganttChartC")
+        };
+        const ganttAxisSvgs = {
+            A: d3.select("#ganttChartA_axis"),
+            B: d3.select("#ganttChartB_axis"),
+            C: d3.select("#ganttChartC_axis")
+        };
+        const ganttTooltip = d3.select("#ganttTooltip");
+        let ganttSortByFreq = { A: false, B: false, C: false };
+        let ganttZoomLevel = { A: 1, B: 1, C: 1 };
+
+        // --- Helper Functions ---
+
+        // Helper: parse date strings in DD/MM/YYYY or ISO format
+        function parseDateStr(dateStr) {
+            if (!dateStr) return null;
+            const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (m) {
+                return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+            }
+            const d = new Date(dateStr);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function openTab(evt, tabName) {
+            // Basic tab switching logic (Main Tabs)
+            let i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+
+            // If switching to chart tab, re-render chart with last data
+            if (tabName === 'chartTab' && lastChartData.labels.length > 0) {
+                renderImpactChart(lastChartData.labels, lastChartData.datasets);
+            }
+            // If switching to Gantt tab, render the active sub-tab's Gantt
+            else if (tabName === 'ganttTab') {
+                const activeSubTabButton = document.querySelector('#ganttTab .sub-tab-button.active');
+                if (activeSubTabButton) {
+                    const planId = activeSubTabButton.getAttribute('onclick').match(/'ganttTab', '([ABC])'/)[1];
+                    const startDate = new Date(startDateInput.value);
+                    const endDate = new Date(endDateInput.value);
+                     if (planData[planId].loaded && !isNaN(startDate) && !isNaN(endDate)) {
+                         renderGanttChart(planId, startDate, endDate);
+                     } else {
+                         clearGanttChart(planId); // Clear if not loaded or dates invalid
+                     }
+                }
+            }
+        }
+
+        function openSubTab(evt, parentTabId, planId) {
+            // Sub-tab switching logic
+            const parentTab = document.getElementById(parentTabId);
+            let i, subtabcontent, subtablinks;
+
+            // Hide all sub-tab content within the parent tab
+            subtabcontent = parentTab.getElementsByClassName("sub-tab-content");
+            for (i = 0; i < subtabcontent.length; i++) {
+                subtabcontent[i].classList.remove("active");
+            }
+
+            // Deactivate all sub-tab buttons within the parent tab's container
+            const subTabContainer = parentTab.querySelector(".sub-tab-container");
+            subtablinks = subTabContainer.getElementsByClassName("sub-tab-button");
+            for (i = 0; i < subtablinks.length; i++) {
+                subtablinks[i].classList.remove("active");
+            }
+
+            // Show the selected sub-tab content and activate its button
+            document.getElementById(parentTabId + planId).classList.add("active");
+            evt.currentTarget.classList.add("active");
+
+            // If switching sub-tab within Gantt tab, render the new plan's Gantt
+            if (parentTabId === 'ganttTab') {
+                 const startDate = new Date(startDateInput.value);
+                 const endDate = new Date(endDateInput.value);
+                 if (planData[planId].loaded && !isNaN(startDate) && !isNaN(endDate)) {
+                     renderGanttChart(planId, startDate, endDate);
+                 } else {
+                     clearGanttChart(planId); // Clear if not loaded or dates invalid
+                 }
+            }
+        }
+
+        function parseFrequency(freqStr) {
+            const match = freqStr.match(/^(\d+)([WDHMY])$/i); // W=weeks, D=days, H=hours, M=months, Y=years
+            if (!match) return { value: 0, unit: null, type: null, hours: 0 };
+
+            const value = parseInt(match[1], 10);
+            const unit = match[2].toUpperCase();
+            let hours = 0;
+            let type = 'calendar'; // Default
+
+            switch (unit) {
+                case 'W': hours = value * 7 * 24; break;
+                case 'D': hours = value * 24; break;   // Days support
+                case 'M': hours = value * 30.44 * 24; break; // Approximate
+                case 'Y': hours = value * 365.25 * 24; break; // Approximate
+                case 'H': hours = value; type = 'hourly'; break;
+                default: return { value: 0, unit: null, type: null, hours: 0 };
+            }
+            return { value, unit, type, hours };
+        }
+
+        function formatDate(date) {
+            // Simple YYYY-MM-DD formatter
+            if (!(date instanceof Date)) return '';
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Helper: format date as DD/MM/YYYY
+        function formatDateDDMMYYYY(date) {
+            if (!(date instanceof Date)) return '';
+            const d = date.getDate().toString().padStart(2, '0');
+            const m = (date.getMonth()+1).toString().padStart(2, '0');
+            const y = date.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+
+        function addDays(date, days) {
+            const result = new Date(date);
+            result.setDate(result.getDate() + days);
+            return result;
+        }
+
+        function getDefaultEndDate(startDate, initialAge, avgDailyUsage, planId) {
+            // Find the max interval for the specific plan
+            let maxHours = 0;
+            const tasks = planData[planId].tasks;
+            tasks.forEach(task => {
+                if (task.frequencyData && task.frequencyData.hours > 0) {
+                    const freqHours = task.frequencyData.hours;
+                    if (freqHours > maxHours) maxHours = freqHours;
+                }
+            });
+            // Default: 2x the largest cycle, in days, from startDate
+            const totalHours = maxHours > 0 ? maxHours * 2 : 365 * 24 * 2; // Default 2 years if no tasks
+            const days = totalHours / avgDailyUsage;
+            const endDate = addDays(startDate, days);
+            return endDate;
+        }
+
+        function updateDefaultEndDate() {
+            const startDate = new Date(startDateInput.value);
+            const initialAge = parseFloat(initialAgeInput.value) || 0;
+            const avgDailyUsage = parseFloat(avgDailyUsageInput.value) || 24;
+            if (isNaN(startDate.getTime())) return;
+            // Use Plan A's data to suggest a default end date initially
+            const defaultEndDate = getDefaultEndDate(startDate, initialAge, avgDailyUsage, 'A');
+            endDateInput.value = formatDate(defaultEndDate);
+        }
+
+        // --- Core Logic Functions (Modified for Plans) ---
+
+        function parseCsvData(csvText) {
+            // Simple CSV parser for 5 columns: ID, Name, Frequency, Duration, Suppressions
+            const lines = csvText.trim().split('\n');
+            const parsedData = [];
+            // Skip header if present
+            const startIndex = lines[0].toLowerCase().startsWith("id,") ? 1 : 0;
+            for (let i = startIndex; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                // Split by comma, but allow quoted fields with commas
+                const parts = [];
+                let current = '';
+                let inQuotes = false;
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        parts.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                parts.push(current);
+                if (parts.length >= 5) {
+                    const id = parseInt(parts[0], 10);
+                    const name = parts[1].replace(/^"|"$/g, '');
+                    const frequency = parts[2].replace(/^"|"$/g, '');
+                    const duration = parseFloat(parts[3]) || 0;
+                    const suppressions = parts[4].replace(/^"|"$/g, '');
+                    const lastDone = parts[5] ? parts[5].replace(/^"|"$/g, '') : '';
+                    if (!isNaN(id) && name && frequency) {
+                        parsedData.push({ id, name, frequency, duration, suppressions, lastDone });
+                    } else {
+                        console.warn(`Skipping invalid line ${i + 1}: ${line}`);
+                        alert(`Warning: Invalid data format found on line ${i + 1}. Please check the CSV format (ID, Name, Frequency, Duration, Suppressions).`);
+                    }
+                } else {
+                    console.warn(`Skipping line ${i + 1} due to insufficient columns: ${line}`);
+                    alert(`Warning: Insufficient columns found on line ${i + 1}. Expected 5 CSV columns.`);
+                }
+            }
+            return parsedData;
+        }
+
+        function processInitialData(sourceData, planId) {
+             const plan = planData[planId];
+             plan.tasks = sourceData.map(task => ({
+                ...task,
+                lastDoneDate: (() => {
+                    const parsed = parseDateStr(task.lastDone);
+                    return parsed || new Date(startDateInput.value);
+                })(),
+                duration: parseFloat(task.duration) || 0,
+                frequencyData: parseFrequency(task.frequency),
+                explicitSuppressions: task.suppressions === 'none' ? [] : task.suppressions.split(',').map(s => parseInt(s.trim(), 10)).filter(id => !isNaN(id)),
+                suppressedBy: [], // To be populated
+                activeSuppressions: {} // Store state like { suppressedById: true/false }
+            }));
+            identifySuppressions(planId); // Identify suppressions for this specific plan
+            populateTaskTable(planId); // Populate the table for this specific plan
+            plan.loaded = true; // Mark plan as loaded
+            clearGanttChart(planId); // Clear any old Gantt chart for this plan
+            console.log(`Plan ${planId} processed with ${plan.tasks.length} tasks.`);
+        }
+
+        function identifySuppressions(planId) {
+            const plan = planData[planId];
+            plan.allSuppressions = []; // Reset for this plan
+            const tasks = plan.tasks;
+            const taskMap = new Map(tasks.map(t => [t.id, t]));
+
+            tasks.forEach(task => {
+                task.suppressedBy = []; // Reset before recalculating
+
+                // 1. Explicit Suppressions (Task A suppresses Task B if B lists A in its suppressions)
+                task.explicitSuppressions.forEach(suppressorId => {
+                    if (taskMap.has(suppressorId)) {
+                         const suppressorTask = taskMap.get(suppressorId);
+                         const suppression = { suppressedById: suppressorId, suppressesId: task.id, type: 'explicit', active: true };
+                         plan.allSuppressions.push(suppression);
+                         task.suppressedBy.push({ id: suppressorId, type: 'explicit' });
+                         // Initialize active state
+                         if (!task.activeSuppressions.hasOwnProperty(suppressorId)) {
+                             task.activeSuppressions[suppressorId] = true;
+                         }
+                    }
+                });
+
+                // 2. Implicit Suppressions (Higher frequency suppresses lower if names match)
+                tasks.forEach(potentialSuppressor => {
+                    if (task.id === potentialSuppressor.id) return; // Don't compare with self
+
+                    // Basic name matching (can be improved)
+                    if (task.name === potentialSuppressor.name) {
+                        const freqA = task.frequencyData;
+                        const freqB = potentialSuppressor.frequencyData;
+
+                        // Only compare if both are valid and have hours
+                        if (freqA.hours > 0 && freqB.hours > 0) {
+                            // B suppresses A if B's frequency is a multiple of A's, and B > A
+                            if (freqB.hours > freqA.hours && freqB.hours % freqA.hours === 0) {
+                                const suppression = { suppressedById: potentialSuppressor.id, suppressesId: task.id, type: 'implicit', active: true };
+                                // Avoid duplicates if already explicitly defined
+                                if (!plan.allSuppressions.some(s => s.suppressedById === potentialSuppressor.id && s.suppressesId === task.id)) {
+                                    plan.allSuppressions.push(suppression);
+                                    task.suppressedBy.push({ id: potentialSuppressor.id, type: 'implicit' });
+                                     if (!task.activeSuppressions.hasOwnProperty(potentialSuppressor.id)) {
+                                         task.activeSuppressions[potentialSuppressor.id] = true;
+                                     }
+                                }
+                            }
+                            // Handle Hourly vs Calendar suppression (if needed - complex logic)
+                            // Example: If B is Hourly and A is Calendar, B might suppress A if times align
+                        }
+                    }
+                });
+            });
+             // Update task table after identification
+             populateTaskTable(planId);
+        }
+
+
+        function populateTaskTable(planId) {
+            const tableBody = taskTableBodies[planId];
+            const tasks = planData[planId].tasks;
+            const taskMap = new Map(tasks.map(t => [t.id, t]));
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            if (!tasks || tasks.length === 0) {
+                 tableBody.innerHTML = `<tr><td colspan="6">No tasks loaded for Plan ${planId}.</td></tr>`;
+                 return;
+            }
+
+            tasks.forEach(task => {
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = task.id;
+                row.insertCell().textContent = task.name;
+                row.insertCell().textContent = task.frequency;
+
+                // Last Done date picker
+                const lastDoneCell = row.insertCell();
+                const dateInput = document.createElement('input');
+                dateInput.type = 'date';
+                dateInput.value = formatDate(task.lastDoneDate);
+                dateInput.dataset.taskId = task.id;
+                dateInput.dataset.planId = planId;
+                dateInput.addEventListener('change', handleLastDoneChange);
+                lastDoneCell.appendChild(dateInput);
+
+                // Editable Duration
+                const durationCell = row.insertCell();
+                const durationInput = document.createElement('input');
+                durationInput.type = 'number';
+                durationInput.value = task.duration;
+                durationInput.min = 0;
+                durationInput.step = 0.1;
+                durationInput.dataset.taskId = task.id;
+                durationInput.dataset.planId = planId; // Add planId
+                durationInput.addEventListener('change', handleDurationChange);
+                durationCell.appendChild(durationInput);
+
+                // Activation Checkboxes
+                const activationCell = row.insertCell();
+                const suppressionList = document.createElement('ul');
+                suppressionList.className = 'suppression-list';
+                if (task.suppressedBy.length === 0) {
+                    activationCell.textContent = 'None';
+                } else {
+                    task.suppressedBy.forEach(s => {
+                        const suppressor = taskMap.get(s.id);
+                        if (!suppressor) return;
+
+                        const listItem = document.createElement('li');
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        // Use stored active state, default to true if undefined
+                        checkbox.checked = task.activeSuppressions[s.id] !== false;
+                        checkbox.dataset.taskId = task.id;
+                        checkbox.dataset.suppressorId = s.id;
+                        checkbox.dataset.planId = planId; // Add planId
+                        checkbox.addEventListener('change', handleSuppressionToggle);
+
+                        const label = document.createElement('label');
+                        label.appendChild(checkbox);
+                        // Change label to: by ID {id} ({title})
+                        label.append(` by ID ${s.id} (${suppressor.name})`);
+                        listItem.appendChild(label);
+                        suppressionList.appendChild(listItem);
+                    });
+                    activationCell.appendChild(suppressionList);
+                }
+            });
+        }
+
+        function handleDurationChange(event) {
+            const taskId = parseInt(event.target.dataset.taskId, 10);
+            const planId = event.target.dataset.planId;
+            const newDuration = parseFloat(event.target.value) || 0;
+            const task = planData[planId].tasks.find(t => t.id === taskId);
+            if (task) {
+                task.duration = newDuration;
+                console.log(`Plan ${planId}, Task ${taskId} duration updated to ${newDuration}`);
+                // Clear old schedule/summary/gantt for this plan if duration changes
+                planData[planId].scheduledTasks = [];
+                planData[planId].monthlySummary = {};
+                clearSummaryTable(planId);
+                clearChart(); // Clear combined chart
+                clearGanttChart(planId); // Clear specific Gantt chart
+            }
+        }
+
+        function handleLastDoneChange(event) {
+            const taskId = parseInt(event.target.dataset.taskId, 10);
+            const planId = event.target.dataset.planId;
+            const newDate = new Date(event.target.value);
+            const task = planData[planId].tasks.find(t => t.id === taskId);
+            if (task && !isNaN(newDate)) {
+                task.lastDoneDate = newDate;
+                console.log(`Plan ${planId}, Task ${taskId} last done date updated to ${newDate}`);
+                // Clear old schedule/summary/gantt for this plan if last done date changes
+                planData[planId].scheduledTasks = [];
+                planData[planId].monthlySummary = {};
+                clearSummaryTable(planId);
+                clearChart(); // Clear combined chart
+                clearGanttChart(planId); // Clear specific Gantt chart
+            }
+        }
+
+        function handleSuppressionToggle(event) {
+            const taskId = parseInt(event.target.dataset.taskId, 10);
+            const suppressorId = parseInt(event.target.dataset.suppressorId, 10);
+            const planId = event.target.dataset.planId;
+            const isActive = event.target.checked;
+            const task = planData[planId].tasks.find(t => t.id === taskId);
+
+            if (task) {
+                 task.activeSuppressions[suppressorId] = isActive;
+                 console.log(`Plan ${planId}: Suppression of Task ${taskId} by Task ${suppressorId} set to ${isActive}`);
+
+                 // Update the global suppression state for this plan as well
+                 const suppressionLink = planData[planId].allSuppressions.find(s => s.suppressesId === taskId && s.suppressedById === suppressorId);
+                 if (suppressionLink) {
+                     suppressionLink.active = isActive;
+                 }
+                 // Clear old schedule/summary/gantt for this plan if suppression changes
+                 planData[planId].scheduledTasks = [];
+                 planData[planId].monthlySummary = {};
+                 clearSummaryTable(planId);
+                 clearChart(); // Clear combined chart
+                 clearGanttChart(planId); // Clear specific Gantt chart
+            }
+        }
+
+        function calculateAllSchedules() {
+            console.log("Calculating schedules for all loaded plans...");
+            const startDate = new Date(startDateInput.value);
+            const initialAge = parseFloat(initialAgeInput.value) || 0;
+            const avgDailyUsage = parseFloat(avgDailyUsageInput.value);
+            if (isNaN(avgDailyUsage)) {
+                alert("Please enter a valid Average Daily Usage.");
+                return;
+            }
+            if (avgDailyUsage <= 0) {
+                alert("Average Daily Usage must be positive.");
+                return;
+            }
+            if (avgDailyUsage > 24) {
+                alert("Average Daily Usage must be 24 hours or less.");
+                return;
+            }
+
+            let analysisEndDate = null;
+            if (endDateInput.value) {
+                analysisEndDate = new Date(endDateInput.value);
+                if (isNaN(analysisEndDate.getTime())) {
+                    alert("Invalid End Date. Using default.");
+                    analysisEndDate = null; // Fallback to default calculation below
+                }
+            }
+
+            let overallMaxEndDate = new Date(startDate); // Track latest end date across all plans
+            let overallMinStartDate = new Date(startDate); // Use the user input start date
+
+            // Calculate schedule for each loaded plan
+            for (const planId of ['A', 'B', 'C']) {
+                if (planData[planId].loaded) {
+                    const planEndDate = analysisEndDate || getDefaultEndDate(startDate, initialAge, avgDailyUsage, planId);
+                    if (planEndDate > overallMaxEndDate) overallMaxEndDate = planEndDate;
+                    calculateScheduleForPlan(planId, startDate, planEndDate, initialAge, avgDailyUsage);
+                } else {
+                    // Clear any previous results if plan is not loaded
+                    planData[planId].scheduledTasks = [];
+                    planData[planId].monthlySummary = {};
+                    clearSummaryTable(planId);
+                    clearGanttChart(planId); // Clear Gantt too
+                }
+            }
+
+            // After calculating all schedules, generate summaries, render combined chart, and render Gantt charts
+            console.log("Calculating summaries...");
+            for (const planId of ['A', 'B', 'C']) {
+                if (planData[planId].loaded) {
+                    calculateAndRenderSummary(planId, overallMinStartDate, overallMaxEndDate);
+                }
+            }
+            console.log("Rendering combined chart...");
+            renderCombinedImpactChart(overallMinStartDate, overallMaxEndDate);
+
+            console.log("Rendering Gantt charts...");
+            for (const planId of ['A', 'B', 'C']) {
+                if (planData[planId].loaded) {
+                    renderGanttChart(planId, overallMinStartDate, overallMaxEndDate);
+                }
+            }
+
+            // Initialize Gantt view windows
+            ganttGlobalRange.start = overallMinStartDate;
+            ganttGlobalRange.end = overallMaxEndDate;
+            ['A', 'B', 'C'].forEach(pid => {
+                if (planData[pid].loaded) {
+                    ganttViewWindow[pid] = {
+                        start: new Date(overallMinStartDate),
+                        end: new Date(overallMaxEndDate)
+                    };
+                }
+            });
+        }
+
+        function calculateScheduleForPlan(planId, startDate, analysisEndDate, initialAge, avgDailyUsage) {
+            console.log(`Calculating schedule for Plan ${planId}...`);
+            const plan = planData[planId];
+            const tasks = plan.tasks;
+            const allSuppressions = plan.allSuppressions;
+            let scheduledTasks = []; // Temporary list for this plan
+
+            // --- Generate Occurrences ---
+            tasks.forEach(task => {
+                if (!task.frequencyData || task.frequencyData.hours <= 0) return;
+                const freqHours = task.frequencyData.hours;
+
+                // ALWAYS start from the task’s lastDoneDate, even for hourly items
+                let currentDueDate = new Date(task.lastDoneDate);
+
+                // Now iterate until end
+                while (currentDueDate <= analysisEndDate) {
+                    scheduledTasks.push({
+                        id: task.id,
+                        name: task.name,
+                        start: formatDate(currentDueDate),
+                        originalTask: task,
+                        dueDate: new Date(currentDueDate)
+                    });
+
+                    // compute next occurrence
+                    if (task.frequencyData.type === 'hourly') {
+                        // advance by freqHours converted to days
+                        const daysToAdd = freqHours / avgDailyUsage;
+                        currentDueDate = addDays(currentDueDate, daysToAdd);
+                    } else {
+                        // calendar based: weeks, months, etc. already in hours
+                        const daysToAdd = freqHours / 24;
+                        currentDueDate = addDays(currentDueDate, daysToAdd);
+                    }
+                }
+            });
+
+            // --- Apply Active Suppressions for this plan ---
+            const finalSchedule = [];
+            scheduledTasks.sort((a, b) => a.dueDate - b.dueDate); // Sort by date
+
+            scheduledTasks.forEach(taskInstance => {
+                let isSuppressed = false;
+                const taskDefinition = taskInstance.originalTask;
+
+                // Find active suppressions targeting this task definition within this plan
+                const activeSuppressors = allSuppressions.filter(s =>
+                    s.suppressesId === taskDefinition.id && s.active
+                );
+
+                for (const suppression of activeSuppressors) {
+                    const suppressorId = suppression.suppressedById;
+                    // Check if a task instance of the suppressor occurs at roughly the same time in this plan's schedule
+                    const suppressorInstance = scheduledTasks.find(supInstance =>
+                        supInstance.id === suppressorId &&
+                        Math.abs(supInstance.dueDate.getTime() - taskInstance.dueDate.getTime()) < (1000 * 60 * 60 * 12) // Tolerance: 12 hours
+                    );
+
+                    if (suppressorInstance) {
+                        // console.log(`Plan ${planId}: Task ${taskInstance.id} on ${taskInstance.start} suppressed by Task ${suppressorId} on ${suppressorInstance.start}`);
+                        isSuppressed = true;
+                        break;
+                    }
+                }
+
+                if (!isSuppressed) {
+                    finalSchedule.push(taskInstance);
+                }
+            });
+
+            plan.scheduledTasks = finalSchedule; // Store the final schedule for the plan
+            console.log(`Plan ${planId} schedule calculated with ${finalSchedule.length} tasks.`);
+        }
+
+        function calculateAndRenderSummary(planId, analysisStart, analysisEnd) {
+            const plan = planData[planId];
+            const schedule = plan.scheduledTasks;
+            const tableBody = summaryTableBodies[planId];
+            tableBody.innerHTML = ''; // Clear previous summary
+
+            if (!schedule || schedule.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5">No scheduled tasks found for Plan ${planId}.</td></tr>`;
+                plan.monthlySummary = {}; // Clear summary data
+                return;
+            }
+
+            const monthlySummary = {}; // { 'YYYY-MM': { totalHours: X, downtime: Y, tasks: [] } }
+
+            let currentDate = new Date(analysisStart);
+            while (currentDate <= analysisEnd) {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const monthKey = `${year}-${(month + 1).toString().padStart(2, '0')}`;
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const totalHoursInMonth = daysInMonth * 24;
+
+                if (!monthlySummary[monthKey]) {
+                    monthlySummary[monthKey] = {
+                        totalHours: totalHoursInMonth,
+                        downtime: 0,
+                        tasks: []
+                    };
+                }
+
+                // Find tasks starting in this month for this plan
+                schedule.forEach(task => {
+                    const taskStartDate = new Date(task.start);
+                    if (taskStartDate.getFullYear() === year && taskStartDate.getMonth() === month) {
+                        const taskDefinition = plan.tasks.find(t => t.id === task.id);
+                        if (taskDefinition) {
+                             monthlySummary[monthKey].downtime += taskDefinition.duration;
+                             // add semicolon delimiter at end of each entry
+                             monthlySummary[monthKey].tasks.push(
+                                 `ID ${task.id}, ${task.name} (${task.start});`
+                             );
+                        }
+                    }
+                });
+
+                // Move to the next month
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                currentDate.setDate(1);
+            }
+
+            // Populate the summary table for this plan
+            Object.keys(monthlySummary).sort().forEach(monthKey => {
+                const summary = monthlySummary[monthKey];
+                const impact = summary.totalHours > 0
+                    ? (summary.downtime * 100 / summary.totalHours)
+                    : 0;
+
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = monthKey;
+                row.insertCell().textContent = summary.totalHours.toFixed(0);
+                row.insertCell().textContent = summary.downtime.toFixed(1);
+                row.insertCell().textContent = impact.toFixed(1) + '%';
+                const cell = row.insertCell();
+                cell.innerHTML = summary.tasks.join('<br/>');
+            });
+
+            plan.monthlySummary = monthlySummary; // Store the calculated summary data
+        }
+
+        function clearSummaryTable(planId) {
+             summaryTableBodies[planId].innerHTML = `<tr><td colspan="5">Calculate schedule to view summary.</td></tr>`;
+        }
+
+        function clearChart() {
+             if (impactChart) {
+                 impactChart.destroy();
+                 impactChart = null;
+             }
+             lastChartData = { labels: [], datasets: [] }; // Reset chart data structure
+             const ctx = document.getElementById('impactChart').getContext('2d');
+             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // Clear canvas
+             clearAllGanttCharts(); // Also clear Gantt charts when clearing the main chart
+        }
+
+        function clearGanttChart(planId) {
+            const axisSvg = ganttAxisSvgs[planId];
+            const chartSvg = ganttChartSvgs[planId];
+            if (axisSvg) {
+                axisSvg.selectAll("*").remove(); // Clear axis SVG content
+            }
+            if (chartSvg) {
+                chartSvg.selectAll("*").remove(); // Clear chart SVG content
+                // Optionally display a placeholder message
+                const width = chartSvg.attr('width') || 900;
+                const height = chartSvg.attr('height') || 500;
+                chartSvg.append("text")
+                    .attr("class", "gantt-no-data")
+                    .attr("x", width / 2)
+                    .attr("y", height / 2)
+                    .attr("dy", "0.35em")
+                    .text(`No data or schedule not calculated for Plan ${planId}.`);
+            }
+        }
+
+        function clearAllGanttCharts() {
+            clearGanttChart('A');
+            clearGanttChart('B');
+            clearGanttChart('C');
+        }
+
+        // --- Chart.js Chart Reference ---
+        let impactChart = null;
+        let lastChartData = { labels: [], datasets: [] }; // Store data for redraw
+        let showAvailability = true;
+        let lastCombinedRange = { start: null, end: null };
+
+        // toggle checkbox listener
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('toggleAvailability')
+                .addEventListener('change', e => {
+                    showAvailability = e.target.checked;
+                    if (lastCombinedRange.start) {
+                        renderCombinedImpactChart(lastCombinedRange.start, lastCombinedRange.end);
+                    }
+                });
+        });
+
+        function renderCombinedImpactChart(analysisStart, analysisEnd) {
+            lastCombinedRange = { start: analysisStart, end: analysisEnd };
+            const allMonths = new Set();
+            const planSummaries = {}; // { A: monthlySummary, B: ..., C: ... }
+
+            // Collect all months and summaries from loaded plans
+            ['A', 'B', 'C'].forEach(planId => {
+                if (planData[planId].loaded && planData[planId].monthlySummary) {
+                    planSummaries[planId] = planData[planId].monthlySummary;
+                    Object.keys(planSummaries[planId]).forEach(monthKey => allMonths.add(monthKey));
+                }
+            });
+
+            const sortedMonths = Array.from(allMonths).sort();
+            const chartLabels = sortedMonths.map(formatMonthYear);
+            const datasets = [];
+            const planColors = {
+                A: 'rgba(13,  71, 161, 0.8)',  // Dark Blue
+                B: 'rgba(230, 81,   0, 0.8)',  // Dark Orange
+                C: 'rgba(46, 125,  50, 0.8)'   // Dark Green
+            };
+
+            // Create dataset for each loaded plan
+            ['A', 'B', 'C'].forEach(planId => {
+                if (planSummaries[planId]) {
+                    const data = sortedMonths.map(monthKey => {
+                        const summary = planSummaries[planId][monthKey];
+                        if (summary) {
+                            const impact = summary.totalHours > 0 ? (summary.downtime * 100 / summary.totalHours) : 0;
+                            return Number(impact.toFixed(2));
+                        }
+                        return 0; // No data for this month in this plan
+                    });
+                    datasets.push({
+                        label: `Plan ${planId} Impact (%)`,
+                        data: data,
+                        backgroundColor: planColors[planId]
+                    });
+                }
+            });
+
+            // --- ADD: availability line over same y‑axis ---
+            const markerStyles = { A: 'rect', B: 'circle', C: 'triangle' };
+            ['A','B','C'].forEach(planId => {
+                if (planSummaries[planId]) {
+                    const avail = sortedMonths.map(monthKey => {
+                        const summary = planSummaries[planId][monthKey];
+                        const impact = summary && summary.totalHours>0
+                            ? (summary.downtime * 100 / summary.totalHours)
+                            : 0;
+                        return Number((100 - impact).toFixed(2));
+                    });
+                    if (showAvailability) {
+                        datasets.push({
+                            label: `Plan ${planId} Availability (%)`,
+                            data: avail,
+                            type: 'line',
+                            borderColor: planColors[planId],
+                            borderWidth: 1,
+                            backgroundColor: planColors[planId],
+                            fill: false,
+                            pointStyle: markerStyles[planId],
+                            pointRadius: 5,
+                            planId
+                        });
+                    }
+
+                    // --- ADD: compute & add linear trend for availability ---
+                    const yVals = avail;
+                    const n = yVals.length;
+                    const xVals = Array.from({length: n}, (_,i) => i);
+                    const xMean = xVals.reduce((s,x)=>s+x,0)/n;
+                    const yMean = yVals.reduce((s,y)=>s+y,0)/n;
+                    const num = xVals.reduce((s,x,i)=>s + (x - xMean)*(yVals[i] - yMean), 0);
+                    const den = xVals.reduce((s,x)=>s + Math.pow(x - xMean,2), 0) || 1;
+                    const slope = num / den;
+                    const intercept = yMean - slope * xMean;
+                    const trend = xVals.map(x => Number((intercept + slope * x).toFixed(2)));
+                    datasets.push({
+                        label: `Plan ${planId} Availability Trend (%)`,
+                        data: trend,
+                        type: 'line',
+                        borderColor: planColors[planId],
+                        borderDash: [5,5],
+                        borderWidth: 1,
+                        fill: false,
+                        pointRadius: 0,
+                        planId
+                    });
+                }
+            });
+
+            lastChartData = { labels: chartLabels, datasets: datasets }; // Save for redraw
+            renderImpactChart(chartLabels, datasets);
+        }
+
+
+        function renderImpactChart(labels, datasets) {
+            const ctx = document.getElementById('impactChart').getContext('2d');
+            if (impactChart) {
+                impactChart.destroy(); // Destroy previous chart instance
+            }
+
+            if (!labels || labels.length === 0 || !datasets || datasets.length === 0) {
+                 console.log("No data to render chart.");
+                 clearChart(); // Ensure canvas is clear
+                 return;
+            }
+
+            // Find max value across all datasets for y-axis scaling
+            let maxImpact = 0;
+            datasets.forEach(ds => {
+                const maxInData = Math.max(...ds.data, 0);
+                if (maxInData > maxImpact) maxImpact = maxInData;
+            });
+            const yAxisMax = Math.max(10, Math.ceil(maxImpact / 10) * 10); // Ensure max is at least 10
+
+            impactChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: datasets // Use the prepared datasets array
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top', // Show legend for multiple plans
+                        },
+                        title: {
+                            display: false // Title is in the HTML H2
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Month Year' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Est. Availability Impact (%)' },
+                            beginAtZero: true,
+                            min: 0,
+                            max: 100 // Fixed 0–100% range
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'trendLabels',
+                    afterDatasetsDraw(chart) {
+                        const { ctx, data, chartArea } = chart;
+                        const fullWidth = chartArea.right - chartArea.left;
+                        data.datasets.forEach((ds, idx) => {
+                            if (ds.label.includes('Trend')) {
+                                const meta = chart.getDatasetMeta(idx);
+                                const pts = meta.data;
+                                const start = pts[0], end = pts[pts.length - 1];
+                                let x = (start.x + end.x) / 2;
+                                const y = (start.y + end.y) / 2;
+                                // shift ±10% of chart width
+                                const shift = ds.planId === 'A'
+                                    ? -0.1 * fullWidth
+                                    : ds.planId === 'C'
+                                      ?  0.1 * fullWidth
+                                      : 0;
+                                x += shift;
+                                const avg = ds.data.reduce((s,v)=>s+v,0) / ds.data.length;
+                                const dy = ds.planId === 'A' ? -10 : ds.planId === 'B' ? 0 : 10;
+                                const text = `avg Availability=${avg.toFixed(1)}%`;
+                                ctx.fillStyle = ds.borderColor;
+                                ctx.font = '10px sans-serif';
+                                const w = ctx.measureText(text).width;
+                                ctx.fillText(text, x - w/2, y + dy);
+                            }
+                        });
+                    }
+                }]
+            });
+        }
+
+        // --- Helper to convert YYYY-MM to 'Mon YYYY' ---
+        function formatMonthYear(ym) {
+            const [year, month] = ym.split('-');
+            const date = new Date(year, parseInt(month, 10) - 1, 1);
+            return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        }
+
+        // --- D3 Gantt Chart Rendering ---
+        function renderGanttChart(planId, analysisStart, analysisEnd) {
+            const axisSvg = ganttAxisSvgs[planId];
+            const chartSvg = ganttChartSvgs[planId];
+            axisSvg.selectAll("*").remove(); // Clear previous content
+            chartSvg.selectAll("*").remove(); // Clear previous content
+
+            const plan = planData[planId];
+            const scheduledTasks = plan.scheduledTasks;
+            const taskDefinitions = new Map(plan.tasks.map(t => [t.id, t]));
+
+            // --- Prepare data for Gantt ---
+            const ganttData = scheduledTasks.map(task => {
+                const definition = taskDefinitions.get(task.id);
+                const startDate = new Date(task.start);
+                const durationHours = definition ? definition.duration : 0;
+                const endDate = new Date(startDate.getTime() + durationHours * 3600 * 1000);
+                const nameWithId = `(${String(task.id).padStart(2, '0')}) ${task.name} [${durationHours} hr]`;
+                return {
+                    id: task.id,
+                    name: nameWithId,   // Use prefixed name on Y‑axis and tooltip
+                    start: startDate,
+                    end: endDate,
+                    duration: durationHours
+                };
+            }).filter(d => d.start <= analysisEnd && d.end >= analysisStart); // Filter tasks within analysis range
+
+            if (ganttData.length === 0) {
+                 clearGanttChart(planId); // Show placeholder message
+                 console.log(`No tasks within analysis range for Gantt Plan ${planId}`);
+                 return;
+            }
+
+            // --- Get unique task names for Y axis ---
+            let taskNames;
+            if (ganttSortByFreq[planId]) {
+                // order by frequency ascending
+                const uniqueIds = Array.from(new Set(ganttData.map(d => d.id)));
+                uniqueIds.sort((a, b) => {
+                    const fhA = (taskDefinitions.get(a)?.frequencyData.hours)||0;
+                    const fhB = (taskDefinitions.get(b)?.frequencyData.hours)||0;
+                    return fhA - fhB;
+                });
+                taskNames = uniqueIds.map(id => ganttData.find(d => d.id === id).name);
+            } else {
+                // default order by ID
+                taskNames = [...new Set(ganttData.map(d => d.name))]
+                    .sort((a, b) => {
+                        const idA = ganttData.find(d => d.name === a).id;
+                        const idB = ganttData.find(d => d.name === b).id;
+                        return idA - idB;
+                    });
+            }
+
+            // --- Define chart dimensions and margins ---
+            const margin = { top: 50, right: 30, bottom: 60, left: 0 }; // Y-axis label area in axisSvg
+
+            // --- Calculate required height based on number of tasks ---
+            const approxRowHeight = 25; // Approximate height per task row
+            const chartHeight = taskNames.length * approxRowHeight;
+            const totalHeight = chartHeight + margin.top + margin.bottom;
+
+            // --- Calculate required width based on time range ---
+            const timeDiffDays = (analysisEnd - analysisStart) / (1000 * 60 * 60 * 24);
+            const pixelsPerDay = 2; // Adjust this value to control horizontal density
+            const zoomLevel = ganttZoomLevel[planId] || 1;
+            const chartWidth = Math.max(timeDiffDays * pixelsPerDay * zoomLevel, 300); // Ensure minimum width
+            const totalWidth = chartWidth + margin.right;
+
+            // Resize SVGs
+            axisSvg.attr("width", parseInt(getComputedStyle(axisSvg.node()).getPropertyValue("--gantt-axis-width")))
+                .attr("height", totalHeight);
+            chartSvg.attr("width", totalWidth)
+                .attr("height", totalHeight);
+
+            // --- Create scales ---
+            const xScale = d3.scaleTime()
+                .domain([analysisStart, analysisEnd]) // Full domain for scrolling
+                .range([0, chartWidth]); // Range covers the calculated chart width
+
+            const yScale = d3.scaleBand()
+                .domain(taskNames)
+                .range([0, chartHeight]) // Use calculated chart height
+                .padding(0.2);
+
+            // Define a color scale so each task row has its own color
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
+                .domain(taskNames);
+
+            // --- Draw Y axis (directly on axisSvg, fixed position) ---
+            axisSvg.append("g")
+                .attr("class", "gantt-axis gantt-y-axis")
+                .attr("transform", `translate(270,${margin.top})`)  <!-- shift axis labels further right -->
+                .call(d3.axisLeft(yScale).tickPadding(2));
+
+            // --- Draw chart content ---
+            const g = chartSvg.append("g")
+                .attr("transform", `translate(${margin.left + 50},${margin.top})`);
+
+            // --- Draw X axis (within the scrollable group) ---
+            const xAxis = d3.axisBottom(xScale)
+                 .ticks(d3.timeMonth.every(1)) // Ensure monthly ticks
+                 .tickFormat(d3.timeFormat("%b %Y"));
+
+            g.append("g")
+                .attr("class", "gantt-axis gantt-x-axis")
+                .attr("transform", `translate(0,${chartHeight})`) // Position at the bottom of the chart area
+                .call(xAxis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .attr("transform", "rotate(-45)");
+
+            // Add Top X axis (duplicate timeline at top)
+            g.append("g")
+                .attr("class", "gantt-axis gantt-x-axis-top")
+                .call(d3.axisTop(xScale)
+                    .ticks(d3.timeMonth.every(1))
+                    .tickFormat(d3.timeFormat("%b %Y"))
+                )
+                .selectAll("text")
+                .style("text-anchor", "start")
+                .attr("dy", "-0.1em")
+                .attr("transform", "rotate(-30)");
+
+             // Add X axis label (within the scrollable group)
+             g.append("text")
+                .attr("class", "gantt-axis-label")
+                .attr("text-anchor", "middle")
+                .attr("x", chartWidth / 2)
+                .attr("y", chartHeight + margin.bottom - 15) // Adjust position below rotated text
+                .style("fill", "#333")
+                .style("font-size", "0.9rem")
+                .text("Date");
+
+            // --- Draw Vertical Grid Lines (within the scrollable group) ---
+            g.append("g")
+                .attr("class", "gantt-grid")
+                .attr("transform", `translate(0,${chartHeight})`)   // position at bottom to draw grid upward
+                .call(d3.axisBottom(xScale)
+                    .ticks(d3.timeMonth.every(1)) // Match X-axis ticks
+                    .tickSize(-chartHeight)        // Extend lines up through chart
+                    .tickFormat("")                // No labels on grid lines
+                );
+
+            // --- Draw Horizontal Grid Lines (between each task row) ---
+            g.append("g")
+                .attr("class", "gantt-horizontal-grid")
+                .attr("transform", `translate(0, 12)`)  // shift lines below each bar
+                .call(d3.axisLeft(yScale)
+                    .tickSize(-chartWidth)
+                    .tickFormat("")
+                );
+
+            // --- Draw Gantt bars (within the scrollable group) ---
+            g.selectAll(".gantt-bar")
+                .data(ganttData)
+                .enter()
+                .append("rect")
+                .attr("class", "gantt-bar")
+                .attr("x", d => xScale(d.start))
+                .attr("y", d => yScale(d.name))
+                .attr("width", d => Math.max(1, xScale(d.end) - xScale(d.start)))
+                .attr("height", yScale.bandwidth())
+                // color by row; keep zero‑hour rule
+                .style("fill",   d => d.duration === 0 ? "none" : colorScale(d.name))
+                .style("stroke", d => d.duration === 0 ? "#e9e6e6" 
+                                                       : d3.color(colorScale(d.name)).darker())
+                .on("mouseover", function(event, d) {
+                    ganttTooltip.style("opacity", 1);
+                })
+                .on("mousemove", function(event, d) {
+                    const [mouseX, mouseY] = d3.pointer(event, document.body); // Use document.body for positioning relative to viewport
+                    ganttTooltip
+                        .html(`Task: ${d.name}<br>Start: ${formatDate(d.start)}<br>End: ${formatDate(d.end)}<br>Duration: ${d.duration.toFixed(1)} hrs`)
+                        .style("left", (mouseX + 15) + "px") // Offset from cursor
+                        .style("top", (mouseY - 10) + "px");
+                })
+                .on("mouseout", function() {
+                    ganttTooltip.style("opacity", 0);
+                });
+
+             // Add chart title within axisSvg (position relative to axisSvg, not 'g')
+             axisSvg.append("text")
+                .attr("x", parseInt(getComputedStyle(axisSvg.node()).getPropertyValue("--gantt-axis-width")) / 2) // Center title over the axis area
+                .attr("y", margin.top / 2) // Position above the main group
+                .attr("text-anchor", "middle")
+                .style("font-size", "1.1rem")
+                .style("font-weight", "bold")
+                .style("fill", "#1a237e")
+                .text(`Plan ${planId} Maintenance Schedule`);
+        }
+
+        // Add sorting for Gantt tasks
+        function sortScheduledTasksByFrequency(planId) {
+            planData[planId].scheduledTasks.sort((a, b) => {
+                return (a.originalTask.frequencyData.hours || 0)
+                     - (b.originalTask.frequencyData.hours || 0);
+            });
+        }
+
+        const sortGanttBtns = document.querySelectorAll('.sortGanttBtn');
+        sortGanttBtns.forEach(button => {
+            button.addEventListener('click', event => {
+                const planId = event.target.dataset.plan;
+                // toggle sort mode
+                ganttSortByFreq[planId] = !ganttSortByFreq[planId];
+                // update button appearance
+                event.target.classList.toggle('active', ganttSortByFreq[planId]);
+                // re-render Gantt
+                const start = new Date(startDateInput.value);
+                let end = new Date(endDateInput.value);
+                if (isNaN(end.getTime())) {
+                    end = getDefaultEndDate(
+                        start,
+                        parseFloat(initialAgeInput.value) || 0,
+                        parseFloat(avgDailyUsageInput.value) || 24,
+                        planId
+                    );
+                }
+                renderGanttChart(planId, start, end);
+            });
+        });
+
+        // Navigation button handlers (zoom only)
+        let ganttGlobalRange = { start: null, end: null };
+        let ganttViewWindow = {
+            A: { start: null, end: null },
+            B: { start: null, end: null },
+            C: { start: null, end: null }
+        };
+        // Track whether drag‑to‑scroll is enabled per plan
+        let ganttLocked = { A: false, B: false, C: false };
+
+        document.querySelectorAll('.navGanttBtn').forEach(btn => {
+            btn.addEventListener('click', event => {
+                const planId = event.target.dataset.plan;
+                const action = event.target.dataset.action;
+                const view = ganttViewWindow[planId];
+                if (action === 'zoomIn') {
+                    ganttZoomLevel[planId] = Math.min(ganttZoomLevel[planId] * 2, 8);
+                }
+                if (action === 'zoomOut') {
+                    ganttZoomLevel[planId] = Math.max(ganttZoomLevel[planId] / 2, 0.25);
+                }
+                renderGanttChart(planId, view.start, view.end);
+            });
+        });
+
+        // Lock/Unlock Scroll button handlers
+        document.querySelectorAll('.lockGanttBtn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const planId = btn.dataset.plan;
+                ganttLocked[planId] = !ganttLocked[planId];
+                // toggle icon and aria-label
+                if (ganttLocked[planId]) {
+                    btn.textContent = '↔️';
+                    btn.setAttribute('aria-label','Unlock Scroll');
+                } else {
+                    btn.textContent = '⇎';
+                    btn.setAttribute('aria-label','Lock Scroll');
+                }
+            });
+        });
+
+        // Drag‑to‑scroll when locked
+        document.querySelectorAll('.gantt-scroll').forEach(scrollDiv => {
+            let isDragging = false,
+                startY = 0, startX = 0,
+                startScrollTop = 0, startScrollLeft = 0;
+
+            scrollDiv.addEventListener('mousedown', e => {
+                if (e.button !== 0) return;
+                const planId = scrollDiv.closest('.sub-tab-content').id.slice(-1);
+                if (!ganttLocked[planId]) return;
+                isDragging = true;
+                startY = e.pageY; startX = e.pageX;
+                startScrollTop = scrollDiv.scrollTop;
+                startScrollLeft = scrollDiv.scrollLeft;
+                scrollDiv.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', e => {
+                if (!isDragging) return;
+                const dy = e.pageY - startY,
+                      dx = e.pageX - startX;
+                scrollDiv.scrollTop = startScrollTop - dy;
+                scrollDiv.scrollLeft = startScrollLeft - dx;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    scrollDiv.style.cursor = '';
+                }
+            });
+        });
+
+        // --- Event Listeners ---
+        calculateBtn.addEventListener('click', function(e) {
+            // Add click effect
+            calculateBtn.classList.remove('clicked');
+            void calculateBtn.offsetWidth; // Force reflow
+            calculateBtn.classList.add('clicked');
+            setTimeout(() => calculateBtn.classList.remove('clicked'), 250);
+
+            calculateAllSchedules(); // Trigger calculation for all plans
+        });
+
+        // Print Summary Buttons (Event Delegation might be better, but this works)
+        const printSummaryBtns = document.querySelectorAll('.printSummaryBtn');
+        printSummaryBtns.forEach(button => {
+            button.addEventListener('click', (event) => {
+                // Printing uses @media print styles which target the active sub-tab
+                window.print();
+            });
+        });
+
+        // Save Summary Buttons
+        const saveSummaryBtns = document.querySelectorAll('.saveSummaryBtn');
+        saveSummaryBtns.forEach(button => {
+             button.addEventListener('click', (event) => {
+                 const planId = event.target.dataset.plan;
+                 exportSummaryAsCSV(planId);
+             });
+        });
+
+        function exportSummaryAsCSV(planId) {
+            const table = document.getElementById(`summaryTable${planId}`);
+            if (!table) return;
+            let csv = '';
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => escapeCSV(th.textContent));
+            csv += headers.join(',') + '\r\n';
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                // Skip placeholder rows
+                if (row.cells.length > 1 && !row.cells[0].textContent.includes("No scheduled tasks")) {
+                    const cells = Array.from(row.querySelectorAll('td')).map(td => escapeCSV(td.textContent));
+                    csv += cells.join(',') + '\r\n';
+                }
+            });
+            // Download
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `monthly_summary_plan_${planId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+
+        // CSV Input Change Listeners (trigger hidden load buttons)
+        Object.keys(csvInputs).forEach(planId => {
+            csvInputs[planId].addEventListener('change', () => {
+                if (csvInputs[planId].files && csvInputs[planId].files[0]) {
+                    loadCsvBtns[planId].click(); // Trigger the hidden button click
+                }
+            });
+        });
+
+        // Hidden Load Button Listeners
+        Object.keys(loadCsvBtns).forEach(planId => {
+            loadCsvBtns[planId].addEventListener('click', () => {
+                const file = csvInputs[planId].files && csvInputs[planId].files[0];
+                if (!file) {
+                    // This shouldn't happen if triggered by file input change, but good practice
+                    alert(`Please select a CSV file for Plan ${planId}.`);
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const csvText = e.target.result;
+                    const newData = parseCsvData(csvText); // Parse the data
+                    if (newData.length > 0) {
+                        processInitialData(newData, planId); // Process for the specific plan
+                        clearSummaryTable(planId); // Clear old summary
+                        clearChart(); // Clear chart as data changed
+                        // Optionally update default end date if Plan A is loaded
+                        if (planId === 'A') {
+                            updateDefaultEndDate();
+                        }
+                        alert(`Plan ${planId} data loaded successfully (${newData.length} tasks).`);
+                    } else {
+                        // Clear data if file was invalid or empty after parsing
+                        planData[planId] = { tasks: [], allSuppressions: [], scheduledTasks: [], monthlySummary: {}, loaded: false };
+                        populateTaskTable(planId); // Show empty table
+                        clearSummaryTable(planId);
+                        clearChart();
+                        alert(`No valid task data found in the CSV for Plan ${planId}.`);
+                    }
+                };
+                reader.onerror = function() {
+                     alert(`Error reading file for Plan ${planId}.`);
+                     // Clear potentially partially loaded data
+                     planData[planId] = { tasks: [], allSuppressions: [], scheduledTasks: [], monthlySummary: {}, loaded: false };
+                     populateTaskTable(planId);
+                     clearSummaryTable(planId);
+                     clearChart();
+                };
+                reader.readAsText(file);
+            });
+        });
+
+
+        // --- Save Tasks Buttons ---
+        const saveTasksBtns = document.querySelectorAll('.saveTasksBtn');
+        saveTasksBtns.forEach(button => {
+            button.addEventListener('click', (event) => {
+                 event.preventDefault();
+                 const planId = event.currentTarget.dataset.plan; 
+                 console.log(`Save Tasks button clicked for Plan ${planId}`);
+                 exportTasksAsCSV(planId);
+            });
+        });
+
+        function escapeCSV(val) {
+            if (typeof val !== 'string') val = String(val);
+            if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                return '"' + val.replace(/"/g, '""') + '"';
+            }
+            return val;
+        }
+
+        function exportTasksAsCSV(planId) {
+            if (!planData[planId]) { 
+                 alert(`No data available for Plan ${planId}.`);
+                 return;
+            }
+            const tasks = planData[planId].tasks;
+            if (!tasks || tasks.length === 0) {
+                alert(`No tasks loaded for Plan ${planId} to save.`);
+                return;
+            }
+            const header = ['ID','Maintenance Items','Frequency','Duration','Suppression Items','Start Date (Last Done)'];
+            let csv = header.join(',') + '\r\n';
+            tasks.forEach(task => {
+                 const row = [
+                      task.id,
+                      task.name,
+                      task.frequency,
+                      task.duration,
+                      (task.suppressions !== undefined ? task.suppressions : (task.explicitSuppressions && task.explicitSuppressions.length > 0 ? task.explicitSuppressions.join(', ') : 'none')),
+                      formatDateDDMMYYYY(task.lastDoneDate)
+                 ];
+                 csv += row.map(escapeCSV).join(',') + '\r\n';
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `maintenance_tasks_plan_${planId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load initial data into Plan A
+            processInitialData(initialTasksData, 'A');
+            // Populate empty states for B and C
+            populateTaskTable('B');
+            populateTaskTable('C');
+            clearSummaryTable('A'); // Show placeholder initially
+            clearSummaryTable('B');
+            clearSummaryTable('C');
+            clearChart(); // Start with an empty bar chart (also clears Gantt)
+            updateDefaultEndDate(); // Set default end date based on Plan A
+            // Ensure Plan A subtabs are active by default for all main tabs
+            openSubTab({ currentTarget: document.querySelector('#tasksTab .sub-tab-button') }, 'tasksTab', 'A');
+            openSubTab({ currentTarget: document.querySelector('#summaryTab .sub-tab-button') }, 'summaryTab', 'A');
+            openSubTab({ currentTarget: document.querySelector('#ganttTab .sub-tab-button') }, 'ganttTab', 'A'); // Activate Gantt A subtab
+            clearGanttChart('A'); // Explicitly clear Gantt A initially
+            clearGanttChart('B');
+            clearGanttChart('C');
+        });
+
+        // --- Gantt Pan Mode Control ---
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Control') {
+                document.querySelectorAll('.gantt-chart-container svg').forEach(svg => {
+                    svg.classList.add('pan-mode');
+                });
+            }
+        });
+        document.addEventListener('keyup', (event) => {
+            if (event.key === 'Control') {
+                 document.querySelectorAll('.gantt-chart-container svg').forEach(svg => {
+                    svg.classList.remove('pan-mode');
+                });
+            }
+        });
+
+    </script>
+
+</body>
+</html>
