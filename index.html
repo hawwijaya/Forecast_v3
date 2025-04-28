@@ -8,7 +8,7 @@
     <style>
         /* --- Modern Professional Layout --- */
         body {
-            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+            font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
             margin: 0;
             padding: 0;
             background: #f5f7fa;
@@ -391,6 +391,9 @@
         .gantt-axis-svg {
             flex: 0 0 var(--gantt-axis-width, 300px);
         }
+        .gantt-total-svg {
+            flex: 0 0 70px;
+        }
         .gantt-scroll {
             flex: 1 1 auto;
             overflow-x: auto;
@@ -669,6 +672,7 @@
             <button class="lockGanttBtn" data-plan="A" aria-label="Lock Scroll">⇎</button>
             <div class="gantt-chart-container">
                 <svg id="ganttChartA_axis" class="gantt-axis-svg"></svg>
+                <svg id="ganttChartA_total" class="gantt-total-svg"></svg>
                 <div class="gantt-scroll">
                     <svg id="ganttChartA" class="gantt-chart-svg"></svg>
                 </div>
@@ -682,6 +686,7 @@
             <button class="lockGanttBtn" data-plan="B" aria-label="Lock Scroll">⇎</button>
             <div class="gantt-chart-container">
                 <svg id="ganttChartB_axis" class="gantt-axis-svg"></svg>
+                <svg id="ganttChartB_total" class="gantt-total-svg"></svg>
                 <div class="gantt-scroll">
                     <svg id="ganttChartB" class="gantt-chart-svg"></svg>
                 </div>
@@ -695,6 +700,7 @@
             <button class="lockGanttBtn" data-plan="C" aria-label="Lock Scroll">⇎</button>
             <div class="gantt-chart-container">
                 <svg id="ganttChartC_axis" class="gantt-axis-svg"></svg>
+                <svg id="ganttChartC_total" class="gantt-total-svg"></svg>
                 <div class="gantt-scroll">
                     <svg id="ganttChartC" class="gantt-chart-svg"></svg>
                 </div>
@@ -847,6 +853,11 @@
             A: d3.select("#ganttChartA_axis"),
             B: d3.select("#ganttChartB_axis"),
             C: d3.select("#ganttChartC_axis")
+        };
+        const ganttTotalSvgs = {
+            A: d3.select("#ganttChartA_total"),
+            B: d3.select("#ganttChartB_total"),
+            C: d3.select("#ganttChartC_total")
         };
         const ganttTooltip = d3.select("#ganttTooltip");
         let ganttSortByFreq = { A: false, B: false, C: false };
@@ -1503,6 +1514,7 @@
         function clearGanttChart(planId) {
             const axisSvg = ganttAxisSvgs[planId];
             const chartSvg = ganttChartSvgs[planId];
+            const totalSvg = ganttTotalSvgs[planId];
             if (axisSvg) {
                 axisSvg.selectAll("*").remove(); // Clear axis SVG content
             }
@@ -1517,6 +1529,9 @@
                     .attr("y", height / 2)
                     .attr("dy", "0.35em")
                     .text(`No data or schedule not calculated for Plan ${planId}.`);
+            }
+            if (totalSvg) {
+                totalSvg.selectAll("*").remove(); // Clear total hours SVG content
             }
         }
 
@@ -1711,7 +1726,7 @@
                                 const dy = ds.planId === 'A' ? -10 : ds.planId === 'B' ? 0 : 10;
                                 const text = `avg Availability=${avg.toFixed(1)}%`;
                                 ctx.fillStyle = ds.borderColor;
-                                ctx.font = '10px sans-serif';
+                                ctx.font = '12px sans-serif';
                                 const w = ctx.measureText(text).width;
                                 ctx.fillText(text, x - w/2, y + dy);
                             }
@@ -1732,8 +1747,10 @@
         function renderGanttChart(planId, analysisStart, analysisEnd) {
             const axisSvg = ganttAxisSvgs[planId];
             const chartSvg = ganttChartSvgs[planId];
+            const totalSvg = ganttTotalSvgs[planId];
             axisSvg.selectAll("*").remove(); // Clear previous content
             chartSvg.selectAll("*").remove(); // Clear previous content
+            totalSvg.selectAll("*").remove(); // Clear previous content
 
             const plan = planData[planId];
             const scheduledTasks = plan.scheduledTasks;
@@ -1802,6 +1819,7 @@
                 .attr("height", totalHeight);
             chartSvg.attr("width", totalWidth)
                 .attr("height", totalHeight);
+            totalSvg.attr("width", 80).attr("height", totalHeight);
 
             // --- Create scales ---
             const xScale = d3.scaleTime()
@@ -1813,7 +1831,42 @@
                 .range([0, chartHeight]) // Use calculated chart height
                 .padding(0.2);
 
-            // Define a color scale so each task row has its own color
+            // --- NEW: Total Hours column ---
+            const totalHoursPerTask = {};
+            plan.scheduledTasks.forEach(inst => {
+                const dur = (taskDefinitions.get(inst.id)?.duration) || 0;
+                totalHoursPerTask[inst.id] = (totalHoursPerTask[inst.id] || 0) + dur;
+            });
+
+            let taskIdsOrdered;
+            if (ganttSortByFreq[planId]) {
+                taskIdsOrdered = taskNames.map(name =>
+                    ganttData.find(d => d.name === name).id
+                );
+            } else {
+                taskIdsOrdered = taskNames.map(name =>
+                    parseInt(name.match(/^\((\d+)\)/)[1], 10)
+                );
+            }
+
+            totalSvg.append("text")
+                .attr("x", 40).attr("y", margin.top/2+20)
+                .attr("text-anchor", "middle")
+                .style("font-size", "0.9rem")
+                .style("font-weight", "bold")
+                .text("Total Hrs");
+
+            taskIdsOrdered.forEach((id, idx) => {
+                const yPos = margin.top + yScale(taskNames[idx]) + yScale.bandwidth()/2 + 5;
+                totalSvg.append("text")
+                    .attr("x", 10)
+                    .attr("y", yPos)
+                    .attr("text-anchor", "right")
+                    .style("font-size", "0.8rem")    // match task title size
+                    .text((totalHoursPerTask[id] || 0).toFixed(1));
+            });
+
+            // --- Define a color scale so each task row has its own color ---
             const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
                 .domain(taskNames);
 
@@ -2065,9 +2118,14 @@
             csv += headers.join(',') + '\r\n';
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
-                // Skip placeholder rows
                 if (row.cells.length > 1 && !row.cells[0].textContent.includes("No scheduled tasks")) {
-                    const cells = Array.from(row.querySelectorAll('td')).map(td => escapeCSV(td.textContent));
+                    const cells = Array.from(row.querySelectorAll('td')).map((td, idx) => {
+                        // for "Tasks Due" column (index 4), convert <br> into actual line breaks
+                        const raw = idx === 4
+                            ? td.innerHTML.replace(/<br\s*\/?>/g, '\n')
+                            : td.textContent;
+                        return escapeCSV(raw);
+                    });
                     csv += cells.join(',') + '\r\n';
                 }
             });
