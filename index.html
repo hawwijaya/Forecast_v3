@@ -525,6 +525,18 @@
     <h1>Maintenance Forecaster (Multi-Plan)</h1>
     <h3 style="margin-top: -10px; color: #555;">by Kuatrinnus Wijaya - April 2025</h3>
 
+    <!-- Input Section -->
+    <div class="input-section" style="margin-top: 12px;">
+        <label for="startDate">Analysis Start Date:</label>
+        <input type="date" id="startDate" value="2025-04-26">
+        <label for="endDate">Analysis End Date:</label>
+        <input type="date" id="endDate">
+        <label for="initialAge">Initial Equipment Age (Hours):</label>
+        <input type="number" id="initialAge" value="0" min="0">
+        <label for="avgDailyUsage">Average Daily Usage (Hours):</label>
+        <input type="number" id="avgDailyUsage" value="24" min="0.01" max="24" step="0.01">
+    </div>
+
     <!-- CSV File Input Section -->
     <div class="input-section" style="max-width: 600px; margin-bottom: 0; margin-top: 24px; flex-direction: column; align-items: flex-start;">
         <div style="margin-bottom: 8px;">
@@ -539,18 +551,6 @@
             <label for="csvInputC" style="font-weight: 500; color: #374151;">Plan C Tasks CSV:</label>
             <input type="file" id="csvInputC" data-plan="C" accept=".csv" style="margin-left: 12px;">
         </div>
-    </div>
-
-    <!-- Input Section -->
-    <div class="input-section" style="margin-top: 12px;">
-        <label for="startDate">Analysis Start Date:</label>
-        <input type="date" id="startDate" value="2025-04-26">
-        <label for="endDate">Analysis End Date:</label>
-        <input type="date" id="endDate">
-        <label for="initialAge">Initial Equipment Age (Hours):</label>
-        <input type="number" id="initialAge" value="0" min="0">
-        <label for="avgDailyUsage">Average Daily Usage (Hours):</label>
-        <input type="number" id="avgDailyUsage" value="24" min="0.01" max="24" step="0.01">
     </div>
 
     <!-- Data Input Section -->
@@ -1423,41 +1423,46 @@
                 return;
             }
 
-            const monthlySummary = {}; // { 'YYYY-MM': { totalHours: X, downtime: Y, tasks: [] } }
+            const monthlySummary = {}; // { 'YYYY-MM': { totalHours, downtime, tasks } }
 
             let currentDate = new Date(analysisStart);
             while (currentDate <= analysisEnd) {
                 const year = currentDate.getFullYear();
                 const month = currentDate.getMonth();
-                const monthKey = `${year}-${(month + 1).toString().padStart(2, '0')}`;
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const monthKey = `${year}-${(month+1).toString().padStart(2,'0')}`;
+                const daysInMonth = new Date(year, month+1, 0).getDate();
                 const totalHoursInMonth = daysInMonth * 24;
 
                 if (!monthlySummary[monthKey]) {
-                    monthlySummary[monthKey] = {
-                        totalHours: totalHoursInMonth,
-                        downtime: 0,
-                        tasks: []
-                    };
+                    monthlySummary[monthKey] = { totalHours: totalHoursInMonth, downtime: 0, tasks: [] };
                 }
 
-                // Find tasks starting in this month for this plan
+                // distribute each task’s duration by overlap with this month (UTC)
                 schedule.forEach(task => {
-                    const taskStartDate = new Date(task.start);
-                    if (taskStartDate.getFullYear() === year && taskStartDate.getMonth() === month) {
-                        const taskDefinition = plan.tasks.find(t => t.id === task.id);
-                        if (taskDefinition) {
-                             monthlySummary[monthKey].downtime += taskDefinition.duration;
-                             // add semicolon delimiter at end of each entry
-                             monthlySummary[monthKey].tasks.push(
-                                 `ID ${task.id}, ${task.name} (${task.start});`
-                             );
-                        }
+                    const def = plan.tasks.find(t => t.id === task.id);
+                    if (!def) return;
+                    // parse start as UTC midnight
+                    const [sy, sm, sd] = task.start.split('-').map(Number);
+                    const start = new Date(Date.UTC(sy, sm - 1, sd));
+                    const end = new Date(start.getTime() + def.duration * 3600 * 1000);
+                    // month boundaries in UTC
+                    const mStart = new Date(Date.UTC(year, month, 1));
+                    const mEnd   = new Date(Date.UTC(year, month + 1, 1));
+                    const oStart = start > mStart ? start : mStart;
+                    const oEnd   = end < mEnd   ? end   : mEnd;
+                    if (oEnd > oStart) {
+                        const hrs = (oEnd - oStart) / (1000 * 60 * 60);
+                        monthlySummary[monthKey].downtime += hrs;
+                    }
+                    // list task only in its UTC start‐month
+                    if (start.getUTCFullYear() === year && start.getUTCMonth() === month) {
+                        monthlySummary[monthKey].tasks.push(
+                            `ID ${task.id}, ${def.name} (${task.start});`
+                        );
                     }
                 });
 
-                // Move to the next month
-                currentDate.setMonth(currentDate.getMonth() + 1);
+                currentDate.setMonth(currentDate.getMonth()+1);
                 currentDate.setDate(1);
             }
 
