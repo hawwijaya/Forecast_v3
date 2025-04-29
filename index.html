@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance Forecaster (Multi-Plan)</title>
+    <!-- Favicon -->
+    <link rel="icon" href="forecast-icon.svg" type="image/svg+xml">
+    <title>Maintenance Forecaster (Multi-Plan) v3</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         /* --- Modern Professional Layout --- */
@@ -525,7 +527,7 @@
 </head>
 <body>
 
-    <h1>Maintenance Forecaster (Multi-Plan)</h1>
+    <h1>Maintenance Forecaster (Multi-Plan) v3</h1>
     <h3 style="margin-top: -10px; color: #555;">by Kuatrinnus Wijaya - April 2025</h3>
 
     <!-- Input Section -->
@@ -1833,9 +1835,16 @@
 
             // --- NEW: Total Hours column ---
             const totalHoursPerTask = {};
-            plan.scheduledTasks.forEach(inst => {
-                const dur = (taskDefinitions.get(inst.id)?.duration) || 0;
-                totalHoursPerTask[inst.id] = (totalHoursPerTask[inst.id] || 0) + dur;
+            // now sum only the hours each bar spends within [analysisStart, analysisEnd]
+            ganttData.forEach(d => {
+                const instStart = d.start;
+                const instEnd   = d.end;
+                const segmentStart = instStart > analysisStart ? instStart : analysisStart;
+                const segmentEnd   = instEnd   < analysisEnd   ? instEnd   : analysisEnd;
+                const hours = segmentEnd > segmentStart
+                    ? (segmentEnd - segmentStart) / (1000 * 60 * 60)
+                    : 0;
+                totalHoursPerTask[d.id] = (totalHoursPerTask[d.id] || 0) + hours;
             });
 
             let taskIdsOrdered;
