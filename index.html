@@ -528,18 +528,18 @@
 <body>
 
     <h1>Maintenance Forecaster (Multi-Plan) v3</h1>
-    <h3 style="margin-top: -10px; color: #555;">by Kuatrinnus Wijaya - April 2025</h3>
+    <h3 style="margin-top: -10px; color: #555;">by Kuatrinnus Wijaya - May 2025</h3>
 
     <!-- Input Section -->
     <div class="input-section" style="margin-top: 12px;">
         <label for="startDate">Analysis Start Date:</label>
-        <input type="date" id="startDate" value="2025-04-26">
+        <input type="date" id="startDate" value="2025-05-01">
         <label for="endDate">Analysis End Date:</label>
         <input type="date" id="endDate">
         <label for="initialAge">Initial Equipment Age (Hours):</label>
         <input type="number" id="initialAge" value="0" min="0">
         <label for="avgDailyUsage">Average Daily Usage (Hours):</label>
-        <input type="number" id="avgDailyUsage" value="24" min="0.01" max="24" step="0.01">
+        <input type="number" id="avgDailyUsage" value="24" min="0.01" max="24" step="0.1">
     </div>
 
     <!-- CSV File Input Section -->
@@ -580,6 +580,11 @@
     <div id="tasksTab" class="tab-content" style="display:block;">
         <h2>Maintenance Tasks</h2>
         <p>Review tasks, edit durations, and manage suppression activation per plan.</p>
+        <!-- added: suppression slippage tolerance -->
+        <div style="margin-bottom: 16px;">
+            <label for="slippageTolerance">Suppression Slippage Tolerance:</label>
+            <input type="number" id="slippageTolerance" value="10" min="0" max="100" step="1">%
+        </div>
         <div class="sub-tab-container">
             <button class="sub-tab-button active" onclick="openSubTab(event, 'tasksTab', 'A')">Plan A</button>
             <button class="sub-tab-button" onclick="openSubTab(event, 'tasksTab', 'B')">Plan B</button>
@@ -1354,7 +1359,10 @@
             const plan = planData[planId];
             const tasks = plan.tasks;
             const allSuppressions = plan.allSuppressions;
-            let scheduledTasks = []; // Temporary list for this plan
+            let scheduledTasks = [];
+
+            // --- NEW: read slippage tolerance percent ---
+            const tolerancePercent = parseFloat(document.getElementById('slippageTolerance').value) / 100 || 0;
 
             // --- Generate Occurrences ---
             tasks.forEach(task => {
@@ -1389,27 +1397,28 @@
 
             // --- Apply Active Suppressions for this plan ---
             const finalSchedule = [];
-            scheduledTasks.sort((a, b) => a.dueDate - b.dueDate); // Sort by date
+            scheduledTasks.sort((a, b) => a.dueDate - b.dueDate);
 
             scheduledTasks.forEach(taskInstance => {
                 let isSuppressed = false;
                 const taskDefinition = taskInstance.originalTask;
 
-                // Find active suppressions targeting this task definition within this plan
                 const activeSuppressors = allSuppressions.filter(s =>
                     s.suppressesId === taskDefinition.id && s.active
                 );
 
                 for (const suppression of activeSuppressors) {
                     const suppressorId = suppression.suppressedById;
-                    // Check if a task instance of the suppressor occurs at roughly the same time in this plan's schedule
+
+                    // --- replaced fixed 12-hour window with dynamic tolerance window ---
+                    const suppressedFreqHours = taskDefinition.frequencyData.hours || 0;
+                    const toleranceMs = suppressedFreqHours * tolerancePercent * 3600 * 1000;
                     const suppressorInstance = scheduledTasks.find(supInstance =>
                         supInstance.id === suppressorId &&
-                        Math.abs(supInstance.dueDate.getTime() - taskInstance.dueDate.getTime()) < (1000 * 60 * 60 * 12) // Tolerance: 12 hours
+                        Math.abs(supInstance.dueDate.getTime() - taskInstance.dueDate.getTime()) <= toleranceMs
                     );
 
                     if (suppressorInstance) {
-                        // console.log(`Plan ${planId}: Task ${taskInstance.id} on ${taskInstance.start} suppressed by Task ${suppressorId} on ${suppressorInstance.start}`);
                         isSuppressed = true;
                         break;
                     }
@@ -1420,7 +1429,7 @@
                 }
             });
 
-            plan.scheduledTasks = finalSchedule; // Store the final schedule for the plan
+            plan.scheduledTasks = finalSchedule;
             console.log(`Plan ${planId} schedule calculated with ${finalSchedule.length} tasks.`);
         }
 
@@ -2023,7 +2032,7 @@
             C: { start: null, end: null }
         };
         // Track whether drag‑to‑scroll is enabled per plan
-        let ganttLocked = { A: false, B: false, C: false };
+        let ganttLocked = { A: true, B: true, C: true };
 
         document.querySelectorAll('.navGanttBtn').forEach(btn => {
             btn.addEventListener('click', event => {
@@ -2150,6 +2159,12 @@
             URL.revokeObjectURL(url);
         }
 
+        // Ensure re-loading same CSV file by clearing input value on click
+        Object.keys(csvInputs).forEach(planId => {
+            csvInputs[planId].addEventListener('click', () => {
+                csvInputs[planId].value = '';
+            });
+        });
 
         // CSV Input Change Listeners (trigger hidden load buttons)
         Object.keys(csvInputs).forEach(planId => {
@@ -2276,6 +2291,17 @@
             clearGanttChart('A'); // Explicitly clear Gantt A initially
             clearGanttChart('B');
             clearGanttChart('C');
+
+            // Initialize lock buttons: apply locked state (icon + hide scrollbars) by default
+            document.querySelectorAll('.lockGanttBtn').forEach(btn => {
+                const planId = btn.dataset.plan;
+                if (ganttLocked[planId]) {
+                    btn.textContent = '↔️';
+                    btn.setAttribute('aria-label', 'Unlock Scroll');
+                    const scrollDiv = btn.closest('.sub-tab-content').querySelector('.gantt-scroll');
+                    scrollDiv.style.overflow = 'hidden';
+                }
+            });
         });
 
         // --- Gantt Pan Mode Control ---
